@@ -80,6 +80,14 @@ Apri `http://localhost:5173`. Il terminale mostra anche un indirizzo da aprire s
 
 4. *Save and Deploy*. Dopo un paio di minuti il gioco è online a un indirizzo tipo `https://ciak-xxx.pages.dev`.
 
+### Se Cloudflare crea un Worker invece di Pages
+
+Va bene lo stesso: il file `wrangler.jsonc` dice già a Cloudflare di eseguire la build e pubblicare la cartella `dist`.
+Il nome in `wrangler.jsonc` (`"name": "ciack"`) deve essere uguale al nome del Worker su Cloudflare.
+
+Il link si trova nel Worker → *Settings* → *Domains & Routes* → riga *workers.dev*, ed è tipo `https://ciack.TUO-NOME.workers.dev`.
+Se in alto vedi "No URLs enabled", attiva *workers.dev* da lì.
+
 ### Aggiungere film dopo la pubblicazione
 
 Basta caricare la nuova cartella su GitHub: Cloudflare ricostruisce il sito da solo in circa un minuto.
