@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ff7a8f"/><stop offset=".48" stop-color="#a246f2"/><stop offset="1" stop-color="#2a2fb5"/>
+  </linearGradient>
+  <radialGradient id="glow" cx=".28" cy=".16" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".98"/><stop offset="1" stop-color="#fff" stop-opacity=".78"/></linearGradient>
+  <linearGradient id="play" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6f91"/><stop offset="1" stop-color="#7b3cf0"/></linearGradient>
+  <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#1a0b4a" flood-opacity=".45"/></filter>
+  <clipPath id="stick"><rect x="236" y="296" width="552" height="112" rx="34"/></clipPath>
+</defs>
+<rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+<rect width="1024" height="1024" rx="230" fill="url(#glow)"/>
+<g filter="url(#sh)">
+  <rect x="236" y="440" width="552" height="350" rx="62" fill="url(#gl)"/>
+  <g transform="rotate(-13 250 420)">
+    <rect x="236" y="296" width="552" height="112" rx="34" fill="url(#gl)"/>
+    <g clip-path="url(#stick)" fill="#7a3df0" fill-opacity=".9">
+      <path d="M300 296h80l-70 112h-80z"/><path d="M450 296h80l-70 112h-80z"/><path d="M600 296h80l-70 112h-80z"/><path d="M750 296h80l-70 112h-80z"/>
+    </g>
+  </g>
+  <circle cx="262" cy="428" r="22" fill="#fff"/>
+  <path d="M470 545 L470 690 L590 617.5 Z" fill="url(#play)" stroke="url(#play)" stroke-width="26" stroke-linejoin="round"/>
+</g>
+</svg>

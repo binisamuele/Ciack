@@ -1,0 +1,34 @@
+COME AGGIUNGERE UN FILM
+=======================
+
+1. Crea una cartella qui dentro con questo nome:
+
+       NUMERO - Titolo del film (anno)
+
+   Esempio:   004 - Il favoloso mondo di Amélie (2001)
+
+   - Il NUMERO decide l'ordine dei livelli (001, 002, 003...).
+   - L'anno è facoltativo, ma aiuta nei suggerimenti.
+
+2. Mettici dentro 5 immagini (jpg, png, webp...).
+   L'ordine è alfabetico: chiamale 1.jpg, 2.jpg, 3.jpg, 4.jpg, 5.jpg
+   Il primo è il più difficile, il quinto il più facile.
+
+3. Facoltativo: un file info.txt per titoli alternativi o con caratteri
+   che non si possono usare nei nomi delle cartelle (come i due punti):
+
+       titolo: Star Wars: Una nuova speranza
+       anno: 1977
+       alias: Guerre stellari
+       alias: Star Wars
+
+   Ogni "alias" è un altro titolo accettato come risposta giusta.
+
+4. Fai commit e push su GitHub: il sito si aggiorna da solo.
+
+Trucchi
+- Una cartella che inizia con _ viene ignorata (utile per le bozze).
+- Le immagini vengono ridimensionate e rinominate in automatico:
+  i nomi dei file non svelano mai il titolo.
+- Puoi rinumerare le cartelle quando vuoi: i progressi di gioco
+  restano salvati perché sono legati al titolo, non al numero.
