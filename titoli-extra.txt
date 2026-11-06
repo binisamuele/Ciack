@@ -1,0 +1,11 @@
+# Titoli extra per i suggerimenti (facoltativo)
+#
+# Di base i suggerimenti mostrano solo i film presenti nel gioco.
+# Se vuoi rendere il gioco più difficile, aggiungi qui altri titoli
+# (uno per riga, anno tra parentesi facoltativo): compariranno tra i
+# suggerimenti ma non sono livelli giocabili.
+#
+# Esempi (togli il # davanti per attivarli):
+# Il padrino (1972)
+# Pulp Fiction (1994)
+# La vita è bella (1997)
