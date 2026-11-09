@@ -7,7 +7,8 @@ COME AGGIUNGERE UN FILM
 
    Esempio:   004 - Il favoloso mondo di Amélie (2001)
 
-   - Il NUMERO decide l'ordine dei livelli (001, 002, 003...).
+   - Il NUMERO serve solo a te per tenerle in ordine (001, 002, 003...):
+     nel gioco i film escono in ordine casuale.
    - L'anno è facoltativo, ma aiuta nei suggerimenti.
 
 2. Mettici dentro 5 immagini (jpg, png, webp...).

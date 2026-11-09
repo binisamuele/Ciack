@@ -21,6 +21,7 @@
   --red: #ff453a;
   --orange: #ff9f0a;
   --yellow: #ffd60a;
+  --gold: #ffcc00;
   --gray: #8e8e93;
 
   --spring: cubic-bezier(.3, 1.45, .5, 1);
@@ -283,6 +284,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   overflow: hidden;
   background: #000;
   cursor: zoom-in;
+  touch-action: none;
   box-shadow:
     0 0 0 .5px rgba(255, 255, 255, .14),
     0 30px 60px -22px rgba(0, 0, 0, .85),
@@ -300,12 +302,13 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transform: scale(1.045);
+  transform: translate3d(var(--from, 0px), 0, 0) scale(1.045);
   filter: blur(14px) saturate(1.2);
   transition: opacity .55s var(--out), transform .9s var(--out), filter .6s var(--out);
   -webkit-user-drag: none;
 }
 .fimg.on { opacity: 1; transform: none; filter: none; }
+.frame.dragging .fimg { transition: opacity .55s var(--out), filter .6s var(--out); }
 
 /* riflesso del vetro sopra l'immagine */
 .frame::after {
@@ -336,7 +339,8 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   box-shadow: inset 0 0 0 2.5px var(--flash, var(--red)), inset 0 0 50px -6px var(--flash, var(--red));
 }
 .frame-flash.go { animation: flash .9s var(--out); }
-.frame.won .frame-flash { --flash: var(--green); opacity: 1; animation: none; box-shadow: inset 0 0 0 2.5px var(--green), inset 0 0 60px -10px rgba(48, 209, 88, .55); }
+.frame.won.first .frame-flash { --flash: var(--gold); opacity: 1; animation: none; box-shadow: inset 0 0 0 2.5px var(--gold), inset 0 0 60px -10px rgba(255, 204, 0, .55); }
+.frame.won:not(.first) .frame-flash { --flash: var(--green); opacity: 1; animation: none; box-shadow: inset 0 0 0 2.5px var(--green), inset 0 0 60px -10px rgba(48, 209, 88, .55); }
 
 .frame-zoom {
   position: absolute;
@@ -394,6 +398,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 .tab.wrong::after { background: var(--red); transform: scale(1); }
 .tab.skip::after { background: var(--gray); transform: scale(1); }
 .tab.ok::after { background: var(--green); transform: scale(1); }
+.tab.ok.gold::after { background: var(--gold); }
 .tab.locked { color: var(--label-4); }
 .tab.nope { animation: nope .4s var(--out); }
 
@@ -492,6 +497,9 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 .guess.skip .g-t { color: var(--label-3); }
 .guess.now .g-t { color: var(--label-3); font-weight: 500; }
 .guess.ok .g-t { color: var(--green); font-weight: 650; }
+.guess.ok.gold .g-ico { color: #3a2a00; background: var(--gold); box-shadow: 0 0 14px rgba(255, 204, 0, .55); }
+.guess.ok.gold .g-ico svg { width: 15px; height: 15px; }
+.guess.ok.gold .g-t { color: var(--gold); }
 .guess.new .g-ico { animation: pop .55s var(--spring) both; }
 .guess.new .g-t { animation: slide-in .55s .05s var(--spring-soft) both; }
 
@@ -602,6 +610,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   box-shadow: inset 0 1px .5px rgba(255, 255, 255, .55), inset 0 0 18px -4px rgba(255, 255, 255, .35), 0 10px 26px -8px rgba(10, 132, 255, .7);
 }
 .has-text .send-skip { opacity: 0; transform: scale(.6); }
+.bar:not(.has-text) .send.cooling .send-skip { opacity: .35; }
 .has-text .send-go { opacity: 1; transform: none; }
 
 /* ------------------------------------------------------------- Suggestions */
@@ -684,6 +693,8 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 }
 .res-badge svg { width: 14px; height: 14px; stroke-width: 3; }
 .result.win .res-badge { --c: var(--green); }
+.result.win.first .res-badge { --c: var(--gold); }
+.result.win.first .res-badge svg { width: 15px; height: 15px; }
 .result.lose .res-badge { --c: var(--red); }
 .res-kicker { margin: 10px 0 0; font-size: 14px; color: var(--label-3); font-weight: 500; }
 .res-title {
@@ -708,6 +719,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 .sq.wrong { background: var(--red); }
 .sq.skip { background: #5a5a62; }
 .sq.ok { background: var(--green); box-shadow: 0 0 14px rgba(48, 209, 88, .6); }
+.sq.ok.gold { background: var(--gold); box-shadow: 0 0 16px rgba(255, 204, 0, .7); }
 
 .btn {
   position: relative;
@@ -872,6 +884,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 }
 .lv-badge svg { width: 12px; height: 12px; stroke-width: 3.4; }
 .lv.win .lv-badge { --c: var(--green); }
+.lv.win.first .lv-badge { --c: var(--gold); color: #3a2a00; }
 .lv.lose .lv-badge { --c: var(--red); }
 .lv.lose .lv-thumb { filter: saturate(.35) brightness(.8); }
 .lv.current {

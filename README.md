@@ -29,7 +29,7 @@ film/
 └── 003 - Titanic (1997)/
 ```
 
-- **Nome della cartella**: `NUMERO - Titolo (anno)`. Il numero decide l'ordine dei livelli, l'anno è facoltativo.
+- **Nome della cartella**: `NUMERO - Titolo (anno)`. Il numero serve solo a te per tenerle in ordine: nel gioco i film escono in ordine casuale. L'anno è facoltativo.
 - **Immagini**: 5 file jpg, png o webp, presi in ordine alfabetico. Va bene qualsiasi dimensione: in fase di build vengono ridimensionati e convertiti in WebP leggeri.
 - **info.txt** (facoltativo) per titoli alternativi accettati come risposta giusta, o per titoli con caratteri non ammessi nei nomi delle cartelle:
 
@@ -41,7 +41,7 @@ film/
   ```
 
 - Una cartella che inizia con `_` viene ignorata: utile per preparare film in anticipo.
-- Puoi rinumerare le cartelle quando vuoi: i progressi sono legati al titolo, non al numero.
+- Puoi rinumerare le cartelle quando vuoi: i progressi sono legati al titolo, non al numero. I film aggiunti dopo finiscono tra quelli ancora da giocare, in un punto a caso.
 
 I tre film già presenti sono **esempi con immagini segnaposto**: cancellali prima di pubblicare.
 
