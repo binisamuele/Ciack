@@ -6,6 +6,10 @@
 
   const MAX = 5;
   const KEY = 'ciak.v1';
+  // Formato del riquadro: segue quello dei fotogrammi ma resta entro questi limiti.
+  // Fuori dai limiti l'immagine riempie il riquadro e i bordi vengono rifilati (niente bande nere).
+  const RATIO_MIN = 4 / 3;  // immagini più "quadrate" di 4:3
+  const RATIO_MAX = 2;      // immagini più larghe di 2:1 (es. cinemascope 2.39:1)
   const doc = document;
   const root = doc.documentElement;
   const $ = (s, r = doc) => r.querySelector(s);
@@ -283,7 +287,7 @@
   }
 
   function setRatio(r) {
-    root.style.setProperty('--arn', clamp(r || 16 / 9, 1.2, 2.8).toFixed(4));
+    root.style.setProperty('--arn', clamp(r || 16 / 9, RATIO_MIN, RATIO_MAX).toFixed(4));
   }
 
   function preload(lv, upto) {

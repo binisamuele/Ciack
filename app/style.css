@@ -40,7 +40,13 @@
   --col: 640px;
   --vvh: 100dvh;
   --arn: 1.7778;
+  --top-gap: 0px;   /* spazio extra in alto, usato quando il gioco è aperto dall'icona sulla Home */
 }
+
+/* App aperta dalla schermata Home: iOS sfoca la fascia sotto la barra di stato,
+   quindi l'interfaccia scende un po' per restarne fuori */
+@media (display-mode: standalone) { :root { --top-gap: 16px; } }
+:root.pwa { --top-gap: 16px; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -174,7 +180,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   z-index: 1;
   display: flex;
   flex-direction: column;
-  padding-top: max(var(--safe-t), 10px);
+  padding-top: calc(max(var(--safe-t), 10px) + var(--top-gap));
   padding-left: var(--safe-l);
   padding-right: var(--safe-r);
   will-change: transform;
@@ -288,7 +294,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   opacity: 0;
   transform: scale(1.045);
   filter: blur(14px) saturate(1.2);
@@ -566,12 +572,22 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   width: 104px;
   border-radius: 999px;
   overflow: hidden;
-  display: grid;
-  place-items: center;
+  display: block;
   font-weight: 600;
   font-size: 16px;
 }
-.send > span { grid-area: 1 / 1; display: flex; align-items: center; gap: 6px; transition: opacity .25s, transform .45s var(--spring); position: relative; z-index: 2; }
+/* entrambi i contenuti centrati sull'intero pulsante, qualunque sia la sua larghezza */
+.send > span {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: opacity .25s, transform .45s var(--spring);
+}
 .send-skip svg { width: 16px; height: 16px; color: var(--label-2); }
 .send-go { opacity: 0; transform: scale(.4) translateY(10px); }
 .send-go svg { width: 24px; height: 24px; stroke-width: 2.6; }
@@ -954,7 +970,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   will-change: transform;
   -webkit-user-drag: none;
 }
-.lb-close { position: absolute; top: calc(max(var(--safe-t), 12px) + 4px); right: calc(max(var(--safe-r), 0px) + 16px); z-index: 2; }
+.lb-close { position: absolute; top: calc(max(var(--safe-t), 12px) + 4px + var(--top-gap)); right: calc(max(var(--safe-r), 0px) + 16px); z-index: 2; }
 .lb-hint {
   position: absolute;
   left: 50%;
@@ -975,7 +991,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   position: fixed;
   z-index: 50;
   left: 50%;
-  top: calc(max(var(--safe-t), 10px) + 62px);
+  top: calc(max(var(--safe-t), 10px) + 62px + var(--top-gap));
   transform: translateX(-50%);
   padding: 11px 18px;
   border-radius: 999px;
