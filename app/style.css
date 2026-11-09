@@ -88,14 +88,20 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .13) 0%, rgba(255, 255, 255, .045) 48%, rgba(255, 255, 255, .075) 100%),
     var(--glass-tint, rgba(30, 30, 36, .3));
-  -webkit-backdrop-filter: blur(var(--glass-blur, 18px)) saturate(190%) brightness(1.04);
-  backdrop-filter: blur(var(--glass-blur, 18px)) saturate(190%) brightness(1.04);
   box-shadow:
     inset 0 1px .5px rgba(255, 255, 255, .3),
     inset 0 -.5px .5px rgba(255, 255, 255, .1),
     inset 0 0 22px -6px rgba(255, 255, 255, .14),
     0 14px 34px -12px rgba(0, 0, 0, .6),
     0 2px 10px -3px rgba(0, 0, 0, .35);
+}
+
+/* Sfocatura dello sfondo solo dove sotto passano contenuti nitidi (suggerimenti, schede, avvisi,
+   pulsanti sopra al fotogramma). Il resto del vetro sta sopra lo sfondo già sfocato: lì la
+   sfocatura non si vede ma costa molto, ad ogni cambio di sfondo, e rende le animazioni scattose. */
+.suggest, .sheet, .alert, .toast, .frame-zoom, .lb-close, .lb-hint {
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px)) saturate(190%) brightness(1.04);
+  backdrop-filter: blur(var(--glass-blur, 18px)) saturate(190%) brightness(1.04);
 }
 
 /* bordo rifrangente: luce speculare in alto a sinistra e in basso a destra */
@@ -155,16 +161,18 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   left: -25%;
   top: -20%;
   width: 150%;
-  height: 90%;
+  height: 97%;
   object-fit: cover;
   opacity: 0;
-  filter: blur(var(--amb-blur, 42px)) saturate(1.7);
   transform: translateZ(0) scale(1.05);
+  /* bordo inferiore sfumato (la sfocatura non lo ammorbidisce più) */
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
   transition: opacity 1.2s var(--out), transform 2.4s var(--out);
   will-change: opacity;
 }
 .ambient img.on { opacity: .8; transform: translateZ(0) scale(1); }
-.ambient.raw img { --amb-blur: 70px; }
+.ambient.raw img { filter: blur(70px) saturate(1.7); } /* solo se la build non ha potuto preparare lo sfondo */
 .ambient-shade {
   position: absolute;
   inset: 0;
@@ -302,13 +310,13 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transform: translate3d(var(--from, 0px), 0, 0) scale(1.045);
-  filter: blur(14px) saturate(1.2);
-  transition: opacity .55s var(--out), transform .9s var(--out), filter .6s var(--out);
+  transform: translate3d(var(--from, 0px), 0, 0) scale(1.03);
+  transition: opacity .45s var(--out), transform .7s var(--out);
+  backface-visibility: hidden;
   -webkit-user-drag: none;
 }
-.fimg.on { opacity: 1; transform: none; filter: none; }
-.frame.dragging .fimg { transition: opacity .55s var(--out), filter .6s var(--out); }
+.fimg.on { opacity: 1; transform: none; }
+.frame.dragging .fimg { transition: opacity .45s var(--out); }
 
 /* riflesso del vetro sopra l'immagine */
 .frame::after {
@@ -460,7 +468,6 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   padding: 0 16px 0 12px;
   font-size: 16px;
   font-weight: 500;
-  transition: height .4s var(--out);
 }
 .guess + .guess::before {
   content: "";
@@ -491,7 +498,17 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 .guess.skip .g-ico svg { width: 14px; height: 14px; }
 .guess.ok .g-ico { --c: var(--green); color: #fff; background: var(--green); box-shadow: 0 0 14px rgba(48, 209, 88, .55); }
 .guess.empty .g-ico { --ring: rgba(255, 255, 255, .1); }
-.guess.now .g-ico { --ring: var(--accent-hi); animation: breathe 2.4s ease-in-out infinite; }
+.guess.now .g-ico { --ring: var(--accent-hi); position: relative; }
+.guess.now .g-ico::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 5px rgba(10, 132, 255, .2);
+  opacity: 0;
+  animation: breathe 2.4s ease-in-out infinite;
+  will-change: opacity, transform;
+}
 
 .g-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .guess.skip .g-t { color: var(--label-3); }
@@ -523,6 +540,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   margin: 0;
 }
 .bar.out { animation: sink .35s var(--out) forwards; }
+.bar.out .send { transition: none; } /* mentre esce non serve animarne la larghezza */
 
 .field {
   flex: 1;
@@ -812,8 +830,8 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  --glass-tint: rgba(28, 28, 34, .66);
-  --glass-blur: 34px;
+  --glass-tint: rgba(28, 28, 34, .74);
+  --glass-blur: 20px;
   transform: translateY(calc(100% + 40px));
   transition: transform .6s var(--spring-soft);
   will-change: transform;
@@ -950,9 +968,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(0, 0, 0, .9);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
+  background: rgba(0, 0, 0, .96);
   touch-action: none;
   animation: fade-in .3s var(--out);
 }
@@ -1026,13 +1042,13 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 }
 @keyframes nope { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
-@keyframes breathe { 0%, 100% { box-shadow: inset 0 0 0 1.5px var(--accent-hi), 0 0 0 0 rgba(10, 132, 255, .0); } 50% { box-shadow: inset 0 0 0 1.5px var(--accent-hi), 0 0 0 5px rgba(10, 132, 255, .18); } }
+@keyframes breathe { 0%, 100% { opacity: 0; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
 @keyframes pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
 @keyframes pop-up { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes slide-in { from { opacity: 0; transform: translateY(-12px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes rise { from { opacity: 0; transform: translateY(40px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes sink { to { opacity: 0; transform: translateY(24px) scale(.97); } }
-@keyframes reveal { from { opacity: 0; filter: blur(10px); transform: translateY(6px); } to { opacity: 1; filter: none; transform: none; } }
+@keyframes reveal { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fade-out { to { opacity: 0; } }
 @keyframes alert-in { from { opacity: 0; transform: scale(1.15); } to { opacity: 1; transform: none; } }

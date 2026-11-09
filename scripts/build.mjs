@@ -134,7 +134,8 @@ async function processImage(file, { thumb = false } = {}) {
         .resize({ width: MAX_SIDE, height: MAX_SIDE, fit: 'inside', withoutEnlargement: true })
         .webp({ quality: QUALITY, effort: 5 })
         .toBuffer({ resolveWithObject: true });
-      const bg = await base().resize({ width: 72, height: 72, fit: 'inside' }).blur(1.6).webp({ quality: 60 }).toBuffer();
+      // sfondo già sfocato e saturato: il telefono non deve applicare filtri dal vivo
+      const bg = await base().resize({ width: 160, height: 160, fit: 'inside' }).modulate({ saturation: 1.7 }).blur(9).webp({ quality: 72 }).toBuffer();
       const th = thumb ? await base().resize({ width: 400, height: 400, fit: 'inside' }).webp({ quality: 72 }).toBuffer() : null;
       return { main: main.data, ext: '.webp', w: main.info.width, h: main.info.height, bg, th, optimized: true };
     } catch (err) {

@@ -126,25 +126,25 @@
 
   /* ----------------------------------------------------------- feedback */
 
+  let hapticLabel = null;
   const haptic = (kind = 'light') => {
     try {
       if (navigator.vibrate) {
         navigator.vibrate(kind === 'error' ? [16, 70, 16] : kind === 'success' ? [10, 60, 22] : 8);
         return;
       }
-      // iOS 18+: il toggle di un <input switch> produce un feedback aptico
-      const tick = () => {
-        const label = doc.createElement('label');
-        label.ariaHidden = 'true';
-        label.style.display = 'none';
+      // iOS 18+: il toggle di un <input switch> produce un feedback aptico (un solo elemento, riusato)
+      if (!hapticLabel) {
+        hapticLabel = doc.createElement('label');
+        hapticLabel.ariaHidden = 'true';
+        hapticLabel.style.display = 'none';
         const input = doc.createElement('input');
         input.type = 'checkbox';
         input.setAttribute('switch', '');
-        label.appendChild(input);
-        doc.head.appendChild(label);
-        label.click();
-        label.remove();
-      };
+        hapticLabel.appendChild(input);
+        doc.head.appendChild(hapticLabel);
+      }
+      const tick = () => hapticLabel.click();
       tick();
       if (kind === 'error' || kind === 'success') setTimeout(tick, 120);
     } catch (e) { /* niente aptica */ }
@@ -438,7 +438,8 @@
     const ci = currentIndex();
     const nextLabel = ci >= G.levels.length ? 'Fine' : ci === view + 1 ? 'Prossimo film' : 'Continua a giocare';
     const first = st.w && n === 1;
-    if (ci < G.levels.length) preloadStart(G.levels[ci]); // il prossimo film è già pronto quando tocca il pulsante
+    // il prossimo film si carica dopo l'animazione del risultato, così non la rallenta
+    if (ci < G.levels.length) setTimeout(() => preloadStart(G.levels[ci]), animate ? 1100 : 0);
     el.result.className = `result glass ${st.w ? 'win' : 'lose'}${first ? ' first' : ''}`;
     el.result.innerHTML = `
       <span class="res-badge">${first ? ICON.star : st.w ? ICON.check : ICON.x}${st.w ? (first ? 'Al primo colpo!' : `Indovinato al ${n}° fotogramma`) : 'Non indovinato'}</span>
@@ -991,6 +992,15 @@
 
   /* ------------------------------------------------------------ confetti */
 
+  /** Prepara il canvas dei coriandoli in anticipo (all'avvio e quando cambia la dimensione). */
+  function sizeConfetti() {
+    const c = el.confetti;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(window.innerWidth * dpr);
+    const h = Math.round(window.innerHeight * dpr);
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  }
+
   /** gold: vittoria al primo colpo, coriandoli dorati con stelle e una pioggia in più */
   function confetti({ gold = false } = {}) {
     if (REDUCED) return;
@@ -999,9 +1009,7 @@
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const W = window.innerWidth;
     const H = window.innerHeight;
-    c.width = W * dpr;
-    c.height = H * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sizeConfetti(); // di solito è già pronto: niente lavoro pesante nel momento della vittoria
     const colors = gold
       ? ['#ffd60a', '#ffcc00', '#ffe58a', '#fff3c4', '#f5b700', '#ffffff', '#ffdf6e']
       : ['#ff453a', '#ff9f0a', '#ffd60a', '#30d158', '#64d2ff', '#0a84ff', '#bf5af2', '#ff375f', '#ffffff'];
@@ -1022,13 +1030,13 @@
         });
       }
     };
-    burst(-10, H * 0.82, -Math.PI / 3.1, 0.75, 85);
-    burst(W + 10, H * 0.82, -Math.PI + Math.PI / 3.1, 0.75, 85);
-    setTimeout(() => burst(W / 2, H * 0.55, -Math.PI / 2, 1.6, 60, 0.75), 180);
+    burst(-10, H * 0.82, -Math.PI / 3.1, 0.75, 75);
+    burst(W + 10, H * 0.82, -Math.PI + Math.PI / 3.1, 0.75, 75);
+    setTimeout(() => burst(W / 2, H * 0.55, -Math.PI / 2, 1.6, 50, 0.75), 180);
     if (gold) {
       setTimeout(() => {
-        burst(W * 0.2, H * 0.7, -Math.PI / 2.4, 0.9, 50, 0.9);
-        burst(W * 0.8, H * 0.7, -Math.PI + Math.PI / 2.4, 0.9, 50, 0.9);
+        burst(W * 0.2, H * 0.7, -Math.PI / 2.4, 0.9, 40, 0.9);
+        burst(W * 0.8, H * 0.7, -Math.PI + Math.PI / 2.4, 0.9, 40, 0.9);
       }, 520);
     }
     const g = speed / 46;
@@ -1036,7 +1044,8 @@
     const tick = (now) => {
       const dt = Math.min(2.5, (now - last) / 16.67);
       last = now;
-      ctx.clearRect(0, 0, W, H);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, c.width, c.height);
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i];
         p.vx *= Math.pow(p.drag, dt);
@@ -1045,12 +1054,11 @@
         p.y += p.vy * dt;
         p.r += p.vr * dt;
         p.tilt += p.vt * dt;
-        if (p.y > H + 40) { parts.splice(i, 1); continue; }
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.r);
-        ctx.scale(1, Math.cos(p.tilt));
-        ctx.fillStyle = p.color;
+        if (p.y > H + 40) { parts[i] = parts[parts.length - 1]; parts.pop(); continue; }
+        // posizione, rotazione e "sventolio" in un'unica trasformazione
+        const cs = Math.cos(p.r), sn = Math.sin(p.r), fl = Math.cos(p.tilt);
+        ctx.setTransform(cs * dpr, sn * dpr, -sn * fl * dpr, cs * fl * dpr, p.x * dpr, p.y * dpr);
+        if (ctx.fillStyle !== p.color) ctx.fillStyle = p.color;
         if (p.shape === 'round') { ctx.beginPath(); ctx.arc(0, 0, p.w / 2.2, 0, Math.PI * 2); ctx.fill(); }
         else if (p.shape === 'star') {
           const R = p.w * 0.9, r = R * 0.45;
@@ -1063,10 +1071,9 @@
           ctx.closePath();
           ctx.fill();
         } else ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-        ctx.restore();
       }
       if (parts.length) requestAnimationFrame(tick);
-      else ctx.clearRect(0, 0, W, H);
+      else { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); }
     };
     requestAnimationFrame(tick);
   }
@@ -1187,6 +1194,8 @@
       window.visualViewport.addEventListener('scroll', syncViewport);
     }
     window.addEventListener('resize', () => { syncViewport(); checkOverflow(); });
+    let confettiResize = 0;
+    window.addEventListener('resize', () => { clearTimeout(confettiResize); confettiResize = setTimeout(sizeConfetti, 300); });
     el.guesses.addEventListener('scroll', checkOverflow, { passive: true });
     window.addEventListener('orientationchange', () => setTimeout(syncViewport, 250));
 
@@ -1198,6 +1207,7 @@
   async function init() {
     bind();
     syncViewport();
+    requestAnimationFrame(sizeConfetti);
     try {
       G = await loadGame();
       prepare(G);
