@@ -166,10 +166,23 @@
     }, 1800);
   }
 
+  /**
+   * Fa partire un effetto una volta sola. La classe viene tolta appena l'effetto finisce:
+   * se restasse, l'effetto ripartirebbe da solo quando l'elemento ricompare (per esempio
+   * il campo di testo nascosto durante il risultato e mostrato di nuovo al film successivo).
+   */
   function restartAnim(node, cls) {
     node.classList.remove(cls);
     void node.offsetWidth;
     node.classList.add(cls);
+    const done = (e) => {
+      if (e.target !== node) return;
+      node.classList.remove(cls);
+      node.removeEventListener('animationend', done);
+      node.removeEventListener('animationcancel', done);
+    };
+    node.addEventListener('animationend', done);
+    node.addEventListener('animationcancel', done);
   }
 
   /* ------------------------------------------------------------ elementi */
@@ -460,6 +473,9 @@
   function renderLevel(i, { frame = null } = {}) {
     mode = 'play';
     view = i;
+    // nessun effetto di tentativi precedenti deve ripartire sul film nuovo
+    flash.classList.remove('go');
+    el.field.classList.remove('shake');
     const lv = curLv();
     const st = curSt();
     el.screen.hidden = true;
