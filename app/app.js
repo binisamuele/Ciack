@@ -1288,7 +1288,28 @@
     navigator.serviceWorker.register('sw.js').catch((err) => console.warn('service worker', err));
   }
 
+  /**
+   * Telefono in orizzontale: iPhone non permette ai siti di bloccare la rotazione, quindi si copre
+   * l'app con un invito a girarlo. Si guarda l'orientamento del telefono (non le dimensioni della
+   * pagina), così la tastiera aperta non lo fa scattare per sbaglio. Tablet e computer esclusi.
+   */
+  function checkOrientation() {
+    const type = (screen.orientation && screen.orientation.type)
+      || (typeof window.orientation === 'number' && Math.abs(window.orientation) === 90 ? 'landscape' : 'portrait');
+    const phone = COARSE && Math.min(screen.width, screen.height) < 520;
+    const block = phone && type.startsWith('landscape');
+    if (block === root.classList.contains('landscape-block')) return;
+    root.classList.toggle('landscape-block', block);
+    if (block) el.input.blur();
+  }
+
   function init() {
+    checkOrientation();
+    if (screen.orientation) screen.orientation.addEventListener('change', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    window.addEventListener('resize', checkOrientation);
+    // dove il sistema lo permette (Android, app installata) blocca davvero in verticale
+    try { screen.orientation?.lock?.('portrait')?.catch(() => {}); } catch (err) { /* non supportato */ }
     bind();
     syncViewport();
     requestAnimationFrame(sizeConfetti);

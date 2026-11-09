@@ -1021,6 +1021,54 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 
 .confetti { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 60; pointer-events: none; }
 
+/* ------------------------------------------------- Telefono in orizzontale */
+
+/* Su iPhone un sito non può bloccare la rotazione: in orizzontale copre tutto e chiede di girarlo. */
+.rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px max(24px, var(--safe-l)) 24px max(24px, var(--safe-r));
+  text-align: center;
+  background: radial-gradient(120% 90% at 50% 30%, #17171f 0%, var(--bg) 70%);
+}
+:root.landscape-block .rotate { display: flex; }
+:root.landscape-block .app,
+:root.landscape-block .sheet,
+:root.landscape-block .scrim,
+:root.landscape-block .lightbox,
+:root.landscape-block .toast { visibility: hidden; }
+.rotate h2 { margin: 18px 0 0; font-family: var(--font-display); font-size: 24px; font-weight: 750; letter-spacing: -.02em; }
+.rotate p { margin: 0; font-size: 16px; color: var(--label-2); }
+.rotate-phone {
+  width: 46px;
+  height: 78px;
+  border-radius: 12px;
+  border: 3px solid var(--label);
+  position: relative;
+  animation: turn 2.6s var(--spring-soft) infinite;
+}
+.rotate-phone span {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 14px;
+  height: 4px;
+  margin-left: -7px;
+  border-radius: 999px;
+  background: var(--label);
+}
+@keyframes turn {
+  0%, 18% { transform: rotate(-90deg); }
+  48%, 82% { transform: rotate(0deg); }
+  100% { transform: rotate(-90deg); }
+}
+
 /* --------------------------------------------------------- Tastiera aperta */
 
 .kb .guesses, .kb .tabs, .kb .frame-zoom { display: none; }
