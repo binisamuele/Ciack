@@ -174,7 +174,7 @@
     play: $('#play'), screen: $('#screen'), frame: $('#frame'), tabs: $('#tabs'),
     guesses: $('#guesses'), composer: $('#composer'), form: $('#form'), input: $('#guess'),
     clear: $('#clear'), send: $('#send'), suggest: $('#suggest'), result: $('#result'),
-    scrim: $('#scrim'), sheetLevels: $('#sheetLevels'), sheetHelp: $('#sheetHelp'),
+    scrim: $('#scrim'), sheetLevels: $('#sheetLevels'),
     lvGrid: $('#lvGrid'), lvSub: $('#lvSub'), btnReset: $('#btnReset'),
     alert: $('#alert'), lightbox: $('#lightbox'), lbStage: $('#lbStage'), lbImg: $('#lbImg'),
     toast: $('#toast'), confetti: $('#confetti'), field: $('.field'),
@@ -689,7 +689,6 @@
     sheet.classList.remove('open', 'dragging');
     sheet.style.transform = '';
     el.scrim.classList.remove('on');
-    if (sheet === el.sheetHelp && !store.data.help) { store.data.help = true; store.save(); }
     const hide = () => { if (!sheet.classList.contains('open')) sheet.hidden = true; if (!openSheetEl) el.scrim.hidden = true; };
     if (instant) hide(); else setTimeout(hide, 450);
   }
@@ -923,14 +922,31 @@
   function bind() {
     doc.addEventListener('touchstart', () => {}, { passive: true }); // abilita :active su iOS
 
-    // riflesso del vetro che segue il dito
+    // riflesso del vetro che segue il dito, solo sui pulsanti e solo mentre li premi
+    let glowEl = null;
+    let glowTimer = 0;
     doc.addEventListener('pointerdown', (e) => {
-      const g = e.target.closest && e.target.closest('.glass');
+      const g = e.target.closest && e.target.closest('.glass.press');
       if (!g) return;
+      clearTimeout(glowTimer);
+      if (glowEl && glowEl !== g) glowEl.style.removeProperty('--mx'), glowEl.style.removeProperty('--my');
+      glowEl = g;
       const r = g.getBoundingClientRect();
       g.style.setProperty('--mx', `${e.clientX - r.left}px`);
       g.style.setProperty('--my', `${e.clientY - r.top}px`);
     }, { passive: true });
+    const releaseGlow = () => {
+      if (!glowEl) return;
+      const g = glowEl;
+      clearTimeout(glowTimer);
+      glowTimer = setTimeout(() => {
+        g.style.removeProperty('--mx');
+        g.style.removeProperty('--my');
+        if (glowEl === g) glowEl = null;
+      }, 450); // dopo la dissolvenza del riflesso
+    };
+    doc.addEventListener('pointerup', releaseGlow, { passive: true });
+    doc.addEventListener('pointercancel', releaseGlow, { passive: true });
 
     el.input.addEventListener('input', onInput);
     el.input.addEventListener('focus', () => { setKeyboard(); renderSuggest(); });
@@ -979,11 +995,10 @@
     el.frame.addEventListener('click', () => { if (!el.frame.classList.contains('loading')) openLightbox(); });
 
     $('#btnLevels').addEventListener('click', () => { if (G && G.levels.length) openSheet(el.sheetLevels); });
-    $('#btnHelp').addEventListener('click', () => openSheet(el.sheetHelp));
     el.screen.addEventListener('click', (e) => { if (e.target.closest('[data-open-levels]')) openSheet(el.sheetLevels); });
     el.scrim.addEventListener('click', () => closeSheet());
     $$('[data-close]').forEach((b) => b.addEventListener('click', () => closeSheet()));
-    [el.sheetLevels, el.sheetHelp].forEach(bindSheetDrag);
+    bindSheetDrag(el.sheetLevels);
 
     el.lvGrid.addEventListener('click', (e) => {
       const b = e.target.closest('.lv');
@@ -1036,9 +1051,7 @@
     doc.body.classList.add('ready');
     if (!G.levels.length) { showEmpty(); return; }
     const ci = currentIndex();
-    if (ci >= G.levels.length) showFinale(); else renderLevel(ci);
-    if (!store.data.help) setTimeout(() => openSheet(el.sheetHelp, { silent: true }), 600);
-  }
+    if (ci >= G.levels.length) showFinale(); else renderLevel(ci);  }
 
   init();
 })();

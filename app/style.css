@@ -117,7 +117,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
 
-/* riflesso che segue il dito */
+/* riflesso: fisso in alto sulle superfici, segue il dito solo sui pulsanti mentre li premi */
 .glass::after {
   content: "";
   position: absolute;
@@ -125,9 +125,12 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   border-radius: inherit;
   pointer-events: none;
   z-index: 1;
-  background: radial-gradient(140px circle at var(--mx, 50%) var(--my, -30%), rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 70%);
+  background: radial-gradient(140px circle at 50% -30%, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 70%);
   opacity: .5;
   transition: opacity .4s var(--out);
+}
+.glass.press::after {
+  background: radial-gradient(140px circle at var(--mx, 50%) var(--my, -30%), rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 70%);
 }
 
 .press {
@@ -215,6 +218,7 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
 }
 .btn-icon svg { width: 22px; height: 22px; stroke-width: 2.1; }
 .btn-sm { width: 36px; height: 36px; }
+.topbar-spacer { width: 46px; height: 46px; flex: none; } /* tiene centrata la pillola */
 .btn-sm svg { width: 17px; height: 17px; stroke-width: 2.6; color: var(--label-2); }
 
 .pill {
@@ -897,24 +901,6 @@ svg .solid { fill: currentColor; stroke-width: 1.4; }
   background: rgba(255, 69, 58, .1);
 }
 .row-danger svg { width: 18px; height: 18px; stroke-width: 2.4; }
-
-/* come si gioca */
-.howto { list-style: none; margin: 4px 0 22px; padding: 0; display: flex; flex-direction: column; gap: 18px; }
-.howto li { display: flex; gap: 14px; align-items: flex-start; }
-.howto b { display: block; font-size: 17px; font-weight: 650; margin-top: 2px; }
-.howto p { margin: 3px 0 0; font-size: 15px; line-height: 1.38; color: var(--label-2); }
-.howto-ico {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  flex: none;
-  color: #fff;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .25), rgba(255, 255, 255, 0) 60%), var(--c);
-  box-shadow: inset 0 1px .5px rgba(255, 255, 255, .5), 0 8px 18px -8px var(--c);
-}
-.howto-ico svg { width: 24px; height: 24px; }
 
 /* ------------------------------------------------------------------- Alert */
 
