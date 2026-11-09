@@ -1,8 +1,11 @@
-# Cloudflare Pages: i fotogrammi hanno nomi basati sul contenuto, quindi si possono tenere in cache per sempre
+# I fotogrammi hanno nomi che dipendono dal loro contenuto e non cambiano mai: si possono tenere in cache per sempre
 /f/*
   Cache-Control: public, max-age=31536000, immutable
 
 /game.json
+  Cache-Control: no-cache
+
+/sw.js
   Cache-Control: no-cache
 
 /*

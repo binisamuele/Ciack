@@ -515,15 +515,16 @@
   }
 
   function showEmpty(msg) {
-    mode = 'empty';
+    mode = msg ? 'error' : 'empty';
     el.play.hidden = true;
     el.composer.hidden = true;
     el.screen.hidden = false;
     el.screen.innerHTML = `
       <div class="card glass">
         <div class="card-ico">${ICON.film}</div>
-        <h2>${msg ? 'Qualcosa non va' : 'Ancora nessun film'}</h2>
+        <h2>${msg ? 'Nessuna connessione' : 'Ancora nessun film'}</h2>
         <p>${msg ? esc(msg) : 'Aggiungi le cartelle dei film in <b>film/</b> e pubblica di nuovo il sito.'}</p>
+        ${msg ? `<button class="btn btn-primary btn-block press" type="button" data-retry>Riprova</button>` : ''}
       </div>`;
   }
 
@@ -1204,24 +1205,105 @@
 
   /* ---------------------------------------------------------------- avvio */
 
-  async function init() {
-    bind();
-    syncViewport();
-    requestAnimationFrame(sizeConfetti);
+  function adopt(game) {
+    prepare(game);
+    G = game;
+    orderLevels();
+  }
+
+  let starting = false;
+  async function start() {
+    if (starting) return;
+    starting = true;
     try {
-      G = await loadGame();
-      prepare(G);
-      orderLevels();
+      adopt(await loadGame());
+      lastCheck = Date.now();
     } catch (err) {
       console.error(err);
       doc.body.classList.add('ready');
-      showEmpty('Non riesco a caricare i film. Controlla la connessione e riprova.');
+      showEmpty('Non riesco a scaricare i film. Riprovo da solo appena torna la connessione.');
       return;
+    } finally {
+      starting = false;
     }
     doc.body.classList.add('ready');
     if (!G.levels.length) { showEmpty(); return; }
     const ci = currentIndex();
     if (ci >= G.levels.length) showFinale(); else renderLevel(ci);
+  }
+
+  /**
+   * Controlla se il sito è stato aggiornato (nuovi film, immagini rifatte) e, se sì, adotta i dati
+   * nuovi restando sul film e sul fotogramma attuali. Serve quando l'app resta aperta in sottofondo
+   * durante un aggiornamento: senza, cercherebbe immagini che non esistono più.
+   */
+  let lastCheck = 0;
+  let checking = null;
+  function refreshGame() {
+    if (window.__CIAK__) return Promise.resolve(false);
+    if (mode === 'error' || !G) { start(); return Promise.resolve(true); }
+    if (checking) return checking;
+    checking = (async () => {
+      let fresh;
+      try { fresh = await loadGame(); } catch (err) { return false; }
+      lastCheck = Date.now();
+      if (!fresh || fresh.build === G.build) return false;
+      const curId = view >= 0 && G.levels[view] ? G.levels[view].id : null;
+      const keepFrame = frameIdx;
+      const typed = el.input.value;
+      adopt(fresh);
+      if (!G.levels.length) { showEmpty(); return true; }
+      const i = curId ? G.levels.findIndex((lv) => lv.id === curId) : -1;
+      if (mode === 'play' && i >= 0) {
+        fimgs.forEach((f) => { f.classList.remove('on'); delete f.dataset.src; });
+        renderLevel(i, { frame: Math.min(keepFrame, unlockedCount(stOf(G.levels[i])) - 1) });
+        if (typed) { el.input.value = typed; onInput(); }
+      } else {
+        const ci = currentIndex();
+        if (ci >= G.levels.length) showFinale(); else renderLevel(ci);
+      }
+      if (openSheetEl === el.sheetLevels) renderLevels();
+      return true;
+    })().finally(() => { checking = null; });
+    return checking;
+  }
+
+  /** Un fotogramma non si carica: probabilmente il sito è stato aggiornato. */
+  let imgRetry = 0;
+  async function onFrameError(img) {
+    if (mode !== 'play' || !img.dataset.src || img.dataset.src !== curLv().f[frameIdx]) return; // solo il fotogramma che si sta mostrando
+    const updated = await refreshGame();
+    if (updated || imgRetry >= 2) return;
+    imgRetry++;
+    setTimeout(() => { // problema di rete momentaneo: riprova la stessa immagine
+      if (mode !== 'play') return;
+      fimgs.forEach((f) => { f.classList.remove('on'); delete f.dataset.src; });
+      showFrame(frameIdx);
+    }, 1500 * imgRetry);
+  }
+
+  function registerServiceWorker() {
+    if (window.__CIAK__ || !('serviceWorker' in navigator)) return;
+    if (!(location.protocol === 'https:' || location.hostname === 'localhost')) return;
+    navigator.serviceWorker.register('sw.js').catch((err) => console.warn('service worker', err));
+  }
+
+  function init() {
+    bind();
+    syncViewport();
+    requestAnimationFrame(sizeConfetti);
+    start();
+    registerServiceWorker();
+
+    // tornando sull'app (anche dopo ore in sottofondo) controlla se il sito è cambiato
+    doc.addEventListener('visibilitychange', () => {
+      if (doc.visibilityState === 'visible' && Date.now() - lastCheck > 20000) refreshGame();
+    });
+    window.addEventListener('pageshow', (e) => { if (e.persisted) refreshGame(); });
+    window.addEventListener('online', () => refreshGame());
+    fimgs.forEach((img) => img.addEventListener('error', () => onFrameError(img)));
+    fimgs.forEach((img) => img.addEventListener('load', () => { imgRetry = 0; }));
+    el.screen.addEventListener('click', (e) => { if (e.target.closest('[data-retry]')) { haptic('light'); start(); } });
   }
 
   init();

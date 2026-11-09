@@ -125,6 +125,20 @@ function readExtraTitles() {
 
 /* --------------------------------------------------------------- immagini */
 
+/*
+ * Ricette di elaborazione. Il nome di ogni file pubblicato dipende solo dall'immagine originale
+ * e dalla ricetta, non dai byte prodotti: così un nuovo aggiornamento del sito non rinomina le
+ * immagini che non sono cambiate, e un'app rimasta aperta continua a trovarle.
+ * Se cambi una ricetta, cambia la sua stringa: i file verranno rigenerati con nomi nuovi.
+ */
+const RECIPE = {
+  main: `main:${MAX_SIDE}:q${QUALITY}:v1`,
+  bg: 'bg:160:sat1.7:blur9:q72:v1',
+  th: 'th:400:q72:v1',
+  raw: 'raw:v1',
+};
+const nameFor = (input, recipe) => sha(Buffer.concat([Buffer.from(recipe + '\0'), input]), 20);
+
 async function processImage(file, { thumb = false } = {}) {
   const input = await fsp.readFile(file);
   if (sharp) {
@@ -137,17 +151,20 @@ async function processImage(file, { thumb = false } = {}) {
       // sfondo già sfocato e saturato: il telefono non deve applicare filtri dal vivo
       const bg = await base().resize({ width: 160, height: 160, fit: 'inside' }).modulate({ saturation: 1.7 }).blur(9).webp({ quality: 72 }).toBuffer();
       const th = thumb ? await base().resize({ width: 400, height: 400, fit: 'inside' }).webp({ quality: 72 }).toBuffer() : null;
-      return { main: main.data, ext: '.webp', w: main.info.width, h: main.info.height, bg, th, optimized: true };
+      return {
+        main: main.data, ext: '.webp', w: main.info.width, h: main.info.height, bg, th, optimized: true,
+        names: { main: nameFor(input, RECIPE.main), bg: nameFor(input, RECIPE.bg), th: nameFor(input, RECIPE.th) },
+      };
     } catch (err) {
       console.warn(C.yellow(`   ! impossibile ottimizzare ${path.basename(file)} (${err.message}), uso l'originale`));
     }
   }
-  return { main: input, ext: path.extname(file).toLowerCase(), w: null, h: null, bg: null, th: null, optimized: false };
+  return { main: input, ext: path.extname(file).toLowerCase(), w: null, h: null, bg: null, th: null, optimized: false, names: { main: nameFor(input, RECIPE.raw) } };
 }
 
-async function emit(buffer, ext) {
+async function emit(buffer, ext, base) {
   if (SINGLE) return `data:${MIME[ext] || 'application/octet-stream'};base64,${buffer.toString('base64')}`;
-  const name = `${sha(buffer)}${ext}`;
+  const name = `${base}${ext}`;
   const dest = path.join(OUT, 'f', name);
   if (!fs.existsSync(dest)) await fsp.writeFile(dest, buffer);
   return `f/${name}`;
@@ -197,11 +214,11 @@ async function collectFilms() {
     let optimized = false;
     for (let i = 0; i < FRAMES; i++) {
       const img = await processImage(path.join(dir, images[i]), { thumb: i === 0 });
-      const src = await emit(img.main, img.ext);
+      const src = await emit(img.main, img.ext, img.names.main);
       f.push(src);
-      b.push(img.bg ? await emit(img.bg, '.webp') : src);
+      b.push(img.bg ? await emit(img.bg, '.webp', img.names.bg) : src);
       if (i === 0) {
-        th = img.th ? await emit(img.th, '.webp') : src;
+        th = img.th ? await emit(img.th, '.webp', img.names.th) : src;
         if (img.w && img.h) ar = Math.round((img.w / img.h) * 1000) / 1000;
         optimized = img.optimized;
       }
@@ -286,6 +303,8 @@ async function main() {
     const manifest = path.join(OUT, 'manifest.webmanifest');
     await fsp.writeFile(manifest, fill(await fsp.readFile(manifest, 'utf8')));
     await fsp.writeFile(path.join(OUT, 'game.json'), JSON.stringify(game));
+    const sw = path.join(OUT, 'sw.js');
+    await fsp.writeFile(sw, (await fsp.readFile(sw, 'utf8')).replaceAll('{{BUILD}}', game.build).replaceAll('{{V}}', version));
   }
 
   console.log('');
