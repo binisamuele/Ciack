@@ -86,12 +86,21 @@
     return prev[n];
   }
 
+  const numbers = (s) => (s.match(/\d+/g) || []).join(' ');
+
+  /**
+   * Risposta giusta: il titolo esatto (o un alias), oppure lo stesso titolo con un piccolo errore
+   * di battitura. Non è mai un errore di battitura:
+   *  - un altro titolo che esiste nel gioco ("L'era glaciale" quando la risposta è "L'era glaciale 2");
+   *  - un titolo con numeri diversi ("Toy Story 3" per "Toy Story 2", o senza il numero del seguito).
+   */
   function isCorrect(guess, ans) {
     const g = norm(guess).replace(/ (18|19|20)\d\d$/, '');
     if (!g) return false;
     const options = [ans.t, ...(ans.a || [])].map(norm).filter(Boolean);
     if (options.includes(g)) return true;
-    return options.some((o) => o.length >= 6 && lev(g, o) <= Math.floor(o.length / 7));
+    if (KNOWN.has(g)) return false;
+    return options.some((o) => o.length >= 6 && numbers(o) === numbers(g) && lev(g, o) <= Math.floor(o.length / 7));
   }
 
   /* -------------------------------------------------------------- dati */
@@ -207,6 +216,7 @@
 
   let G = null;          // dati del gioco
   let INDEX = [];        // indice dei titoli per i suggerimenti
+  let KNOWN = new Set(); // tutti i titoli del gioco, normalizzati
   let view = -1;         // livello mostrato
   let frameIdx = 0;      // fotogramma mostrato
   let mode = 'loading';  // play | finale | empty | error
@@ -236,6 +246,7 @@
       const core = first > 0 && ARTICLES.has(n.slice(0, first)) ? first + 1 : 0; // inizio dopo l'articolo
       return { t: t.t, y: t.y, n, map, core, ns: n.replace(/ /g, '') };
     }).filter((t) => t.n);
+    KNOWN = new Set(INDEX.map((t) => t.n));
   }
 
   /** Ordine dei film: quelli finiti nell'ordine in cui li ha giocati, poi quello in corso,
