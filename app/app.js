@@ -128,6 +128,10 @@
 
   async function loadGame() {
     if (window.__CIAK__) return window.__CIAK__;
+    // la pagina ha già chiesto l'elenco dei film mentre scaricava il resto: si usa quella risposta
+    const early = window.__game;
+    window.__game = null;
+    if (early) { try { return await early; } catch (e) { /* si riprova qui sotto */ } }
     const res = await fetch('game.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error('game.json ' + res.status);
     return res.json();
@@ -218,6 +222,7 @@
   const motion = {};
   const cssVar = (name) => getComputedStyle(root).getPropertyValue(name).trim();
   const ease = (name) => motion[name] || (motion[name] = cssVar(name) || 'ease-out');
+  const dur = (name) => motion['d' + name] || (motion['d' + name] = cssVar(name) || '.5s');
   const ms = (name) => motion['t' + name] || (motion['t' + name] = parseFloat(cssVar(name)) * 1000 || 500);
   const NO_ANIM = { finished: Promise.resolve(), cancel() {} };
   function anim(node, frames, opts) {
@@ -359,7 +364,7 @@
   const frameStep = () => el.frame.clientWidth + 14; // distanza tra due fotogrammi affiancati
 
   function place(img, x, animate) {
-    img.style.transition = animate ? `transform ${cssVar('--t-snap')} var(--snap)` : 'none';
+    img.style.transition = animate ? `transform ${dur('--t-snap')} var(--snap)` : 'none';
     img.style.transform = `translate3d(${x.toFixed(1)}px, 0, 0)`;
     img.style.opacity = 1;
   }
@@ -399,7 +404,7 @@
         next.style.transform = 'scale(1.04)';
         next.style.opacity = 0;
         void next.offsetWidth;
-        next.style.transition = `opacity .35s linear, transform ${cssVar('--t-snap')} var(--snap)`;
+        next.style.transition = `opacity .35s linear, transform ${dur('--t-snap')} var(--snap)`;
         next.style.transform = 'translate3d(0, 0, 0)';
         next.style.opacity = 1;
         cur.style.transition = 'opacity .35s linear';
@@ -567,6 +572,8 @@
     el.frame.classList.toggle('won', !!st.w);
     el.frame.classList.toggle('first', !!st.w && st.g.length === 1);
     if (fimgs[frameLayer].dataset.src !== lv.f[0]) el.frame.classList.add('loading');
+    // mentre il fotogramma si scarica si vede la sua versione sfocata, già pronta e leggerissima
+    el.frame.style.setProperty('--ph', lv.pb ? `url("${lv.b[0]}")` : 'none');
     setRatio(lv.ar);
     const k = frame != null ? frame : st.d ? (st.w ? st.g.length - 1 : MAX - 1) : Math.min(st.g.length, MAX - 1);
     showFrame(k);
@@ -1056,7 +1063,7 @@
 
   /* ------------------------------------------------------------ lightbox */
 
-  const lb = { s: 1, x: 0, y: 0, ptrs: new Map(), start: null, lastTap: 0, dragY: 0, closing: false };
+  const lb = { s: 1, x: 0, y: 0, ptrs: new Map(), start: null, lastTap: 0, dragX: 0, dragY: 0, closing: false, switching: false };
 
   /** Trasformazione che riporta l'immagine a schermo intero esattamente sopra il riquadro del fotogramma. */
   function lbHome() {
@@ -1071,14 +1078,45 @@
     const y = fr.top + fr.height / 2 - st.top - (st.height / 2) * s;
     return `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${s.toFixed(4)})`;
   }
-  const lbNow = () => `translate3d(${lb.x}px, ${lb.y + lb.dragY}px, 0) scale(${lb.s})`;
+  const lbNow = () => `translate3d(${lb.x + lb.dragX}px, ${lb.y + lb.dragY}px, 0) scale(${lb.s})`;
+  const lbCan = (dir) => mode === 'play' && frameIdx + dir >= 0 && frameIdx + dir < unlockedCount(curSt());
+
+  /** A schermo intero si passa al fotogramma accanto senza uscire. */
+  function lbGo(dir) {
+    if (lb.switching || lb.closing || !lbCan(dir)) return;
+    lb.switching = true;
+    haptic('light');
+    const img = el.lbImg;
+    const w = el.lbStage.clientWidth * 0.45;
+    Object.assign(lb, { s: 1, x: 0, y: 0, dragY: 0 });
+    img.style.transition = 'transform .16s ease-in, opacity .16s linear';
+    img.style.transform = `translate3d(${-dir * w}px, 0, 0) scale(1)`;
+    img.style.opacity = 0;
+    setTimeout(() => {
+      const k = frameIdx + dir;
+      showFrame(k, dir);
+      const enter = () => {
+        lb.dragX = 0;
+        img.style.transition = 'none';
+        img.style.transform = `translate3d(${dir * w}px, 0, 0) scale(1)`;
+        void img.offsetWidth;
+        img.style.transition = `transform ${dur('--t-snap')} var(--snap), opacity .2s linear`;
+        img.style.transform = lbNow();
+        img.style.opacity = 1;
+        lb.switching = false;
+      };
+      img.src = curLv().f[k];
+      if (img.decode) img.decode().then(enter, enter); else enter();
+    }, 160);
+  }
 
   function openLightbox() {
     const src = fimgs[frameLayer].dataset.src;
     if (!src || lb.closing) return;
     el.lbImg.src = src;
-    Object.assign(lb, { s: 1, x: 0, y: 0, dragY: 0 });
+    Object.assign(lb, { s: 1, x: 0, y: 0, dragX: 0, dragY: 0, switching: false });
     lb.ptrs.clear();
+    el.lbImg.style.opacity = '';
     el.lightbox.hidden = false;
     applyLb(false);
     const home = lbHome();
@@ -1102,7 +1140,7 @@
     a.finished.then(done, done);
   }
   function applyLb(animate) {
-    el.lbImg.style.transition = animate ? `transform ${cssVar('--t-snap')} var(--snap)` : 'none';
+    el.lbImg.style.transition = animate ? `transform ${dur('--t-snap')} var(--snap)` : 'none';
     el.lbImg.style.transform = lbNow();
     // trascinando verso il basso lo sfondo si schiarisce
     el.lbBg.style.transition = lb.dragY ? 'none' : '';
@@ -1118,6 +1156,7 @@
     const stage = el.lbStage;
     const pt = (e) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     stage.addEventListener('pointerdown', (e) => {
+      if (lb.switching || lb.closing) return;
       stage.setPointerCapture(e.pointerId);
       lb.ptrs.set(e.pointerId, pt(e));
       const pts = [...lb.ptrs.values()];
@@ -1146,7 +1185,12 @@
         const dy = pts[0].y - lb.start.p.y;
         if (Math.hypot(dx, dy) > 6) lb.start.moved = true;
         if (lb.s > 1.01) { lb.x = lb.start.x + dx; lb.y = lb.start.y + dy; }
-        else lb.dragY = dy;
+        else {
+          // senza zoom: in orizzontale si cambia fotogramma, in verticale si chiude
+          if (!lb.start.axis && Math.hypot(dx, dy) > 8) lb.start.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+          if (lb.start.axis === 'x') lb.dragX = lbCan(dx < 0 ? 1 : -1) ? dx : dx * 0.2;
+          else if (lb.start.axis === 'y') lb.dragY = dy;
+        }
         applyLb(false);
       }
     });
@@ -1161,6 +1205,11 @@
       }
       if (lb.ptrs.size) return;
       lb.start = null;
+      if (lb.dragX) {
+        const dir = lb.dragX < 0 ? 1 : -1;
+        if (Math.abs(lb.dragX) > 56 && lbCan(dir)) { lbGo(dir); return; }
+        lb.dragX = 0;
+      }
       if (Math.abs(lb.dragY) > 90) { closeLightbox(); return; }
       lb.dragY = 0;
       if (st && st.p && !st.moved && performance.now() - st.t < 250) {
@@ -1378,6 +1427,13 @@
     });
 
     doc.addEventListener('keydown', (e) => {
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && mode === 'play' && !openSheetEl && !busy
+        && !(doc.activeElement === el.input && el.input.value)) {
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        if (!el.lightbox.hidden) lbGo(dir);
+        else if (lbCan(dir)) showFrame(frameIdx + dir, dir);
+        return;
+      }
       if (e.key !== 'Escape') return;
       if (!el.lightbox.hidden) closeLightbox();
       else if (openSheetEl) closeSheet();

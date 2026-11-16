@@ -290,6 +290,7 @@ async function main() {
     await fsp.rm(path.join(OUT, 'f'), { recursive: true, force: true });
     const iconSvg = await fsp.readFile(path.join(APP_DIR, 'icons', 'icon.svg'));
     html = html
+      .replace(/<script data-early>[\s\S]*?<\/script>\n?/, '')
       .replace(/<link rel="manifest"[^>]*>\n?/, '')
       .replace(/<link rel="apple-touch-icon"[^>]*>\n?/, '')
       .replace(/href="icons\/icon\.svg"/, `href="data:image/svg+xml;base64,${iconSvg.toString('base64')}"`)

@@ -15,6 +15,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <title>{{NOME}}</title>
+<script data-early>try{window.__game=fetch('game.json',{cache:'no-cache'}).then(function(r){if(!r.ok)throw 0;return r.json()});window.__game.catch(function(){})}catch(e){}</script>
 <link rel="stylesheet" href="style.css?v={{V}}">
 <script>try{if(navigator.standalone||matchMedia('(display-mode: standalone)').matches)document.documentElement.classList.add('pwa')}catch(e){}</script>
 </head>
