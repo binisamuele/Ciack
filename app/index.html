@@ -27,21 +27,19 @@
 
 <div class="app" id="app">
   <header class="topbar">
-    <button class="glass btn-icon press" id="btnLevels" type="button" aria-label="Livelli">
+    <button class="glass btn-icon press" id="btnLevels" type="button" aria-label="Tutti i film">
       <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/></svg>
     </button>
-    <div class="glass pill" id="pill" aria-live="polite">
-      <span class="pill-k">{{NOME}}</span>
-    </div>
-    <span class="topbar-spacer" aria-hidden="true"></span>
+    <span class="brand">{{NOME}}</span>
+    <button class="glass count press" id="count" type="button" aria-live="polite"></button>
   </header>
 
   <main class="stage" id="stage">
     <section class="play" id="play" hidden>
-      <div class="frame-wrap">
+      <div class="frame-wrap" id="frameWrap">
         <button class="frame loading" id="frame" type="button" aria-label="Ingrandisci fotogramma">
           <img class="fimg" alt="" draggable="false"><img class="fimg" alt="" draggable="false">
-          <span class="frame-flash" aria-hidden="true"></span>
+          <span class="frame-ring" aria-hidden="true"></span>
           <span class="frame-zoom glass" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/></svg>
           </span>
@@ -57,7 +55,7 @@
         <button class="tab" role="tab" type="button" data-i="4">5</button>
       </div>
 
-      <div class="guesses" id="guesses"></div>
+      <div class="guesses" id="guesses" hidden></div>
     </section>
 
     <section class="screen" id="screen" hidden></section>
@@ -81,7 +79,7 @@
           <span>Salta</span>
           <svg viewBox="0 0 24 24"><path d="M5 6.5v11l7-5.5zM12.5 6.5v11l7-5.5z" class="solid"/></svg>
         </span>
-        <span class="send-go" aria-label="Conferma">
+        <span class="send-go">
           <svg viewBox="0 0 24 24"><path d="M12 19V5.5M6 11l6-6 6 6"/></svg>
         </span>
       </button>
@@ -96,20 +94,15 @@
 <section class="sheet glass" id="sheetLevels" role="dialog" aria-modal="true" aria-labelledby="lvTitle" hidden>
   <div class="sheet-grab"><span></span></div>
   <header class="sheet-head">
-    <div>
-      <h2 id="lvTitle">Livelli</h2>
-      <p class="sheet-sub" id="lvSub"></p>
-    </div>
-    <button class="glass btn-icon btn-sm press" type="button" data-close aria-label="Chiudi">
+    <h2 id="lvTitle">Film</h2>
+    <button class="btn-icon btn-sm press" type="button" data-close aria-label="Chiudi">
       <svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg>
     </button>
   </header>
+  <div class="lv-stats" id="lvStats"></div>
   <div class="sheet-body">
     <div class="lv-grid" id="lvGrid"></div>
-    <button class="row-danger press" id="btnReset" type="button">
-      <svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/></svg>
-      Ricomincia da capo
-    </button>
+    <button class="row-danger" id="btnReset" type="button">Ricomincia da capo</button>
   </div>
 </section>
 
@@ -120,18 +113,18 @@
       <p id="alertMsg"></p>
     </div>
     <div class="alert-actions">
-      <button class="alert-btn press" type="button" data-v="0">Annulla</button>
-      <button class="alert-btn alert-danger press" type="button" data-v="1">OK</button>
+      <button class="alert-btn" type="button" data-v="0">Annulla</button>
+      <button class="alert-btn alert-danger" type="button" data-v="1">OK</button>
     </div>
   </div>
 </div>
 
 <div class="lightbox" id="lightbox" hidden>
+  <div class="lb-bg" id="lbBg"></div>
   <div class="lb-stage" id="lbStage"><img id="lbImg" alt="" draggable="false"></div>
   <button class="glass btn-icon press lb-close" id="lbClose" type="button" aria-label="Chiudi">
     <svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg>
   </button>
-  <div class="lb-hint glass">Pizzica o tocca due volte per ingrandire</div>
 </div>
 
 <div class="toast glass" id="toast" role="status" hidden></div>
@@ -140,7 +133,6 @@
 <div class="rotate" id="rotate" role="alert" aria-live="assertive">
   <div class="rotate-phone" aria-hidden="true"><span></span></div>
   <h2>Gira il telefono</h2>
-  <p>{{NOME}} si gioca in verticale</p>
 </div>
 
 <script src="app.js?v={{V}}" defer></script>

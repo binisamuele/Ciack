@@ -197,20 +197,60 @@
   /* ------------------------------------------------------------ elementi */
 
   const el = {
-    app: $('#app'), ambient: $('#ambient'), pill: $('#pill'), stage: $('#stage'),
-    play: $('#play'), screen: $('#screen'), frame: $('#frame'), tabs: $('#tabs'),
+    app: $('#app'), ambient: $('#ambient'), count: $('#count'), stage: $('#stage'),
+    play: $('#play'), screen: $('#screen'), frame: $('#frame'), frameWrap: $('#frameWrap'), tabs: $('#tabs'),
     guesses: $('#guesses'), composer: $('#composer'), form: $('#form'), input: $('#guess'),
     clear: $('#clear'), send: $('#send'), suggest: $('#suggest'), result: $('#result'),
     scrim: $('#scrim'), sheetLevels: $('#sheetLevels'),
-    lvGrid: $('#lvGrid'), lvSub: $('#lvSub'), btnReset: $('#btnReset'),
-    alert: $('#alert'), lightbox: $('#lightbox'), lbStage: $('#lbStage'), lbImg: $('#lbImg'),
+    lvGrid: $('#lvGrid'), lvStats: $('#lvStats'), btnReset: $('#btnReset'),
+    alert: $('#alert'), lightbox: $('#lightbox'), lbBg: $('#lbBg'), lbStage: $('#lbStage'), lbImg: $('#lbImg'),
     toast: $('#toast'), confetti: $('#confetti'), field: $('.field'),
   };
   const fimgs = $$('.fimg', el.frame);
   const ambImgs = $$('img', el.ambient);
   const tabBtns = $$('.tab', el.tabs);
   const lens = $('.lens', el.tabs);
-  const flash = $('.frame-flash', el.frame);
+  const flash = $('.frame-ring', el.frame);
+
+  /* ---------------------------------------------------------------- moto */
+
+  // Le curve a molla sono definite una volta sola, nel CSS: qui si leggono per le animazioni da codice.
+  const motion = {};
+  const cssVar = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+  const ease = (name) => motion[name] || (motion[name] = cssVar(name) || 'ease-out');
+  const ms = (name) => motion['t' + name] || (motion['t' + name] = parseFloat(cssVar(name)) * 1000 || 500);
+  const NO_ANIM = { finished: Promise.resolve(), cancel() {} };
+  function anim(node, frames, opts) {
+    if (REDUCED || !node.animate) return NO_ANIM;
+    try {
+      const a = node.animate(frames, opts);
+      // con l'app in sottofondo le animazioni si fermano: chi ne aspetta la fine non deve restare bloccato
+      const finished = Promise.race([a.finished.catch(() => {}), sleep((opts.duration || 0) + 150)]);
+      return { finished, cancel: () => a.cancel() };
+    } catch (e) { return NO_ANIM; }
+  }
+
+  /**
+   * Quando il contenuto cambia altezza (un tentativo in più, il risultato al posto del campo),
+   * fotogramma e selettore si spostano: invece di saltare scivolano nella nuova posizione.
+   */
+  const flips = new WeakMap();
+  function flip(mutate) {
+    const nodes = [el.frameWrap, el.tabs, el.guesses];
+    if (REDUCED || el.play.hidden) { mutate(); return; }
+    const top = (n) => (n.getClientRects().length ? n.getBoundingClientRect().top : null);
+    const before = nodes.map(top);
+    mutate();
+    nodes.forEach((n, i) => {
+      const old = flips.get(n);
+      if (old) old.cancel();
+      const now = top(n);
+      if (before[i] == null || now == null) return;
+      const d = before[i] - now;
+      if (Math.abs(d) < 1) return;
+      flips.set(n, anim(n, [{ transform: `translate3d(0, ${d}px, 0)` }, { transform: 'translate3d(0, 0, 0)' }], { duration: ms('--t-spring'), easing: ease('--spring') }));
+    });
+  }
 
   /* --------------------------------------------------------------- stato */
 
@@ -315,8 +355,25 @@
 
   let frameLayer = 0;
   let frameToken = 0;
-  /** dir: 1 = arriva da destra (avanti), -1 = da sinistra (indietro), 0 = dissolvenza sul posto */
-  function showFrame(k, dir = 0) {
+  let frameHide = 0;
+  const frameStep = () => el.frame.clientWidth + 14; // distanza tra due fotogrammi affiancati
+
+  function place(img, x, animate) {
+    img.style.transition = animate ? `transform ${cssVar('--t-snap')} var(--snap)` : 'none';
+    img.style.transform = `translate3d(${x.toFixed(1)}px, 0, 0)`;
+    img.style.opacity = 1;
+  }
+
+  function resetFrames() {
+    frameToken++;
+    fimgs.forEach((f) => { f.style.transition = 'none'; f.style.opacity = 0; delete f.dataset.src; delete f.dataset.on; });
+  }
+
+  /**
+   * dir: 1 = arriva da destra (avanti), -1 = da sinistra (indietro), 0 = dissolvenza sul posto.
+   * dx: spostamento già fatto dal dito, quando si arriva da uno swipe.
+   */
+  function showFrame(k, dir = 0, dx = 0) {
     const lv = curLv();
     frameIdx = k;
     const src = lv.f[k];
@@ -324,28 +381,48 @@
     el.ambient.classList.toggle('raw', !lv.pb);
     setAmbient(lv.b[k]);
     renderTabs();
-    if (cur.dataset.src === src && cur.classList.contains('on')) return;
+    if (cur.dataset.src === src && cur.dataset.on) { place(cur, 0, true); return; }
     const next = fimgs[1 - frameLayer];
     const token = ++frameToken;
-    // posizione di partenza del nuovo fotogramma, senza animazione
-    next.style.transition = 'none';
-    next.classList.remove('on');
-    next.style.setProperty('--from', `${dir * 56}px`);
-    void next.offsetWidth;
-    next.style.transition = '';
-    cur.style.setProperty('--from', `${-dir * 56}px`); // quello vecchio esce dal lato opposto
-    next.dataset.src = src;
-    next.src = src;
-    const done = () => {
+    const go = () => {
       if (token !== frameToken) return;
       if (!lv.ar && next.naturalWidth) setRatio(next.naturalWidth / next.naturalHeight);
-      next.classList.add('on');
-      cur.classList.remove('on');
+      const slide = dir && cur.dataset.on && !REDUCED;
+      if (slide) {
+        const w = frameStep();
+        place(next, dx + dir * w, false);
+        void next.offsetWidth;
+        place(next, 0, true);
+        place(cur, -dir * w, true);
+      } else {
+        next.style.transition = 'none';
+        next.style.transform = 'scale(1.04)';
+        next.style.opacity = 0;
+        void next.offsetWidth;
+        next.style.transition = `opacity .35s linear, transform ${cssVar('--t-snap')} var(--snap)`;
+        next.style.transform = 'translate3d(0, 0, 0)';
+        next.style.opacity = 1;
+        cur.style.transition = 'opacity .35s linear';
+        cur.style.opacity = 0;
+      }
+      next.dataset.on = '1';
+      delete cur.dataset.on;
       frameLayer = 1 - frameLayer;
       el.frame.classList.remove('loading');
+      clearTimeout(frameHide);
+      frameHide = setTimeout(() => {
+        if (token !== frameToken) return;
+        cur.style.transition = 'none';
+        cur.style.opacity = 0;
+      }, 520);
     };
-    if (next.decode) next.decode().then(done, () => (next.complete ? done() : next.addEventListener('load', done, { once: true })));
-    else next.addEventListener('load', done, { once: true });
+    // già pronto perché affiancato durante lo swipe
+    if (next.dataset.src === src && next.complete && next.naturalWidth) { go(); return; }
+    next.style.opacity = 0;
+    next.dataset.src = src;
+    next.src = src;
+    if (next.decode) next.decode().then(go, () => (next.complete ? go() : next.addEventListener('load', go, { once: true })));
+    else next.addEventListener('load', go, { once: true });
   }
 
   function setRatio(r) {
@@ -375,13 +452,19 @@
 
   /* --------------------------------------------------------------- render */
 
-  function renderPill() {
+  function renderCount() {
+    const total = G ? G.levels.length : 0;
     if (mode === 'play') {
-      el.pill.innerHTML = `<span class="pill-k">Film</span><span class="pill-n">${view + 1}</span><span class="pill-t">di ${G.levels.length}</span>`;
+      el.count.innerHTML = `<b>${view + 1}</b>/ ${total}`;
+      el.count.setAttribute('aria-label', `Film ${view + 1} di ${total}`);
     } else if (mode === 'finale') {
-      el.pill.innerHTML = `<span class="pill-k">Completato</span><span class="pill-dot"></span><span class="pill-n">${countWon()}</span><span class="pill-t">/ ${G.levels.length}</span>`;
+      el.count.innerHTML = `${ICON.check}<b>${countWon()}</b>/ ${total}`;
+      el.count.setAttribute('aria-label', `${countWon()} indovinati su ${total}`);
+    } else {
+      el.count.innerHTML = '';
+      return;
     }
-    restartAnim(el.pill, 'bump');
+    restartAnim(el.count, 'bump');
   }
 
   function unlockedCount(st) { return st.d ? MAX : Math.min(st.g.length + 1, MAX); }
@@ -412,27 +495,22 @@
     }
   }
 
-  /** Cinque caselle fisse: tentativi fatti, tentativo attuale, tentativi rimasti. */
+  /** Solo i tentativi fatti: quelli rimasti si leggono già dal selettore dei fotogrammi. */
   function renderGuesses(animateLast = false) {
     const st = curSt();
     const n = st.g.length;
-    const rows = [];
-    for (let k = 0; k < MAX; k++) {
-      let cls = 'empty', ico = '', txt = '';
-      if (k < n) {
-        const g = st.g[k];
-        if (st.w && k === n - 1) { cls = n === 1 ? 'ok gold' : 'ok'; ico = n === 1 ? ICON.star : ICON.check; txt = esc(g); }
-        else if (g === '') { cls = 'skip'; ico = ICON.skip; txt = 'Saltato'; }
-        else { cls = 'wrong'; ico = ICON.x; txt = esc(g); }
-      } else if (k === n && !st.d) {
-        cls = 'now';
-        txt = k === 0 ? 'Primo tentativo' : `Tentativo ${k + 1} di ${MAX}`;
-      }
-      const isNew = animateLast && k === n - 1;
-      rows.push(`<li class="guess ${cls}${isNew ? ' new' : ''}"><span class="g-ico">${ico}</span><span class="g-t">${txt}</span></li>`);
-    }
-    el.guesses.innerHTML = `<ol class="glist glass" aria-label="Tentativi">${rows.join('')}</ol>`;
-    el.play.classList.toggle('done', !!st.d);
+    const rows = st.g.map((g, k) => {
+      let cls = 'wrong', ico = ICON.x, txt = esc(g);
+      if (st.w && k === n - 1) { cls = n === 1 ? 'ok gold' : 'ok'; ico = n === 1 ? ICON.star : ICON.check; }
+      else if (g === '') { cls = 'skip'; ico = ICON.skip; txt = 'Saltato'; }
+      return `<li class="guess ${cls}${animateLast && k === n - 1 ? ' new' : ''}"><span class="g-ico">${ico}</span><span class="g-t">${txt}</span></li>`;
+    });
+    const apply = () => {
+      el.guesses.hidden = !n;
+      el.guesses.innerHTML = n ? `<ol class="glist glass" aria-label="Tentativi">${rows.join('')}</ol>` : '';
+      el.guesses.scrollTop = el.guesses.scrollHeight;
+    };
+    if (animateLast) flip(apply); else apply();
     requestAnimationFrame(checkOverflow);
   }
 
@@ -454,31 +532,26 @@
     const lv = curLv();
     const ans = lv.ans;
     const n = st.g.length;
-    const squares = Array.from({ length: MAX }, (_, k) => {
-      let c = '';
-      if (k < n) c = st.w && k === n - 1 ? (n === 1 ? 'ok gold' : 'ok') : st.g[k] === '' ? 'skip' : 'wrong';
-      return `<i class="sq ${c}" style="animation-delay:${0.2 + k * 0.06}s"></i>`;
-    }).join('');
-    const ci = currentIndex();
-    const nextLabel = ci >= G.levels.length ? 'Fine' : ci === view + 1 ? 'Prossimo film' : 'Continua a giocare';
     const first = st.w && n === 1;
+    const ci = currentIndex();
+    const nextLabel = ci >= G.levels.length ? 'Fine' : ci === view + 1 ? 'Prossimo film' : 'Continua';
     // il prossimo film si carica dopo l'animazione del risultato, così non la rallenta
     if (ci < G.levels.length) setTimeout(() => preloadStart(G.levels[ci]), animate ? 1100 : 0);
     el.result.className = `result glass ${st.w ? 'win' : 'lose'}${first ? ' first' : ''}`;
     el.result.innerHTML = `
-      <span class="res-badge">${first ? ICON.star : st.w ? ICON.check : ICON.x}${st.w ? (first ? 'Al primo colpo!' : `Indovinato al ${n}° fotogramma`) : 'Non indovinato'}</span>
-      ${st.w ? '' : '<p class="res-kicker">Il film era</p>'}
-      <h2 class="res-title"${st.w ? ' style="margin-top:12px"' : ''}>${esc(ans.t)}</h2>
+      <span class="res-badge">${first ? ICON.star : st.w ? ICON.check : ICON.x}${first ? 'Al primo colpo' : st.w ? `Indovinato al ${n}°` : 'Non indovinato'}</span>
+      <h2 class="res-title">${esc(ans.t)}</h2>
       ${ans.y ? `<p class="res-year">${ans.y}</p>` : ''}
-      <div class="res-squares">${squares}</div>
       <button class="btn btn-primary btn-block press" id="btnNext" type="button">${nextLabel} ${ICON.arrow}</button>`;
+    const swap = () => { el.form.hidden = true; el.result.hidden = false; el.guesses.scrollTop = 0; };
     if (animate) {
       el.form.classList.add('out');
-      setTimeout(() => { el.form.hidden = true; el.result.hidden = false; requestAnimationFrame(checkOverflow); }, 260);
-    } else {
-      el.form.hidden = true;
-      el.result.hidden = false;
-    }
+      setTimeout(() => {
+        if (mode !== 'play' || curLv() !== lv) return;
+        flip(swap);
+        requestAnimationFrame(checkOverflow);
+      }, 240);
+    } else swap();
   }
 
   function renderLevel(i, { frame = null } = {}) {
@@ -499,7 +572,7 @@
     showFrame(k);
     renderGuesses();
     renderBottom();
-    renderPill();
+    renderCount();
     preload(lv, unlockedCount(st));
     resetInput();
   }
@@ -507,11 +580,10 @@
   async function goLevel(i) {
     if (busy) return;
     busy = true;
-    const anim = !REDUCED && el.stage.animate;
-    if (anim) await el.stage.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(-28px) scale(.98)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' }).finished;
-    fimgs.forEach((f) => { f.classList.remove('on'); delete f.dataset.src; });
+    await anim(el.stage, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translate3d(-24px, 0, 0) scale(.97)' }], { duration: 160, easing: 'ease-in', fill: 'forwards' }).finished.catch(() => {});
+    resetFrames();
     if (i >= G.levels.length) showFinale(); else renderLevel(i);
-    if (anim) await el.stage.animate([{ opacity: 0, transform: 'translateX(28px) scale(.98)' }, { opacity: 1, transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' }).finished;
+    await anim(el.stage, [{ opacity: 0, transform: 'translate3d(32px, 0, 0) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: ms('--t-spring'), easing: ease('--spring'), fill: 'forwards' }).finished.catch(() => {});
     el.stage.getAnimations?.().forEach((a) => a.cancel());
     busy = false;
   }
@@ -523,36 +595,37 @@
     el.composer.hidden = true;
     el.screen.hidden = false;
     const won = countWon();
-    const total = G.levels.length;
-    const lost = countDone() - won;
+    const firsts = G.levels.filter((lv) => { const st = stOf(lv); return st.w && st.g.length === 1; }).length;
     el.screen.innerHTML = `
       <div class="card glass">
         <div class="card-ico">${ICON.trophy}</div>
-        <h2>Hai visto tutti i film!</h2>
-        <p>${won === total ? 'Li hai indovinati tutti. Leggendaria.' : `Ne hai indovinati ${won} su ${total}.`}<br>Quando arriveranno nuovi film li troverai qui.</p>
+        <h2>Hai visto tutti i film</h2>
         <div class="card-stats">
-          <div class="stat"><b>${won}</b><span>indovinati</span></div>
-          <div class="stat"><b>${lost}</b><span>persi</span></div>
+          <div class="stat w"><b>${won}</b><span>${won === 1 ? 'indovinato' : 'indovinati'}</span></div>
+          <div class="stat g"><b>${firsts}</b><span>al primo colpo</span></div>
+          <div class="stat"><b>${countDone() - won}</b><span>${countDone() - won === 1 ? 'perso' : 'persi'}</span></div>
         </div>
-        <button class="btn btn-primary btn-block press" type="button" data-open-levels>${ICON.grid} Rivedi i livelli</button>
+        <button class="btn btn-primary btn-block press" type="button" data-open-levels>Rivedi i film</button>
       </div>`;
-    renderPill();
+    renderCount();
     const last = G.levels[G.levels.length - 1];
     if (last) setAmbient(last.b[MAX - 1]);
   }
 
-  function showEmpty(msg) {
-    mode = msg ? 'error' : 'empty';
+  function showEmpty(offline) {
+    mode = offline ? 'error' : 'empty';
     el.play.hidden = true;
     el.composer.hidden = true;
     el.screen.hidden = false;
     el.screen.innerHTML = `
       <div class="card glass">
-        <div class="card-ico">${ICON.film}</div>
-        <h2>${msg ? 'Nessuna connessione' : 'Ancora nessun film'}</h2>
-        <p>${msg ? esc(msg) : 'Aggiungi le cartelle dei film in <b>film/</b> e pubblica di nuovo il sito.'}</p>
-        ${msg ? `<button class="btn btn-primary btn-block press" type="button" data-retry>Riprova</button>` : ''}
+        <div class="card-ico mute">${ICON.film}</div>
+        <h2>${offline ? 'Nessuna connessione' : 'Ancora nessun film'}</h2>
+        ${offline
+          ? '<button class="btn btn-primary btn-block press" type="button" data-retry>Riprova</button>'
+          : '<p>Aggiungi le cartelle dei film in <b>film/</b></p>'}
       </div>`;
+    renderCount();
   }
 
   /* ---------------------------------------------------------- tentativi */
@@ -572,7 +645,7 @@
     if (guess && st.g.some((g) => g && norm(g) === norm(guess))) {
       restartAnim(el.field, 'shake');
       haptic('error');
-      toast('Hai già provato questo titolo');
+      toast('Già provato');
       return;
     }
 
@@ -594,10 +667,10 @@
     busy = true;
     if (guess) {
       restartAnim(el.field, 'shake');
-      flash.style.setProperty('--flash', 'var(--red)');
+      flash.style.setProperty('--ring', 'var(--red)');
       haptic('error');
     } else {
-      flash.style.setProperty('--flash', 'rgba(255,255,255,.55)');
+      flash.style.setProperty('--ring', 'rgba(255,255,255,.6)');
       haptic('light');
     }
     restartAnim(flash, 'go');
@@ -697,12 +770,12 @@
       if (!exact) {
         if (!el.suggest.hidden && sugActive >= 0) { pick(sugActive); return; }
         const res = search(text);
-        if (res.length === 1) { sugList = res; pick(0); toast('Tocca di nuovo per confermare'); return; }
+        if (res.length === 1) { sugList = res; pick(0); toast('Tocca ancora per confermare'); return; }
         if (res.length > 1) {
           el.input.focus();
           renderSuggest();
           if (!COARSE) setActive(0);
-          toast('Scegli il titolo tra i suggerimenti');
+          toast('Scegli un titolo');
           return;
         }
       }
@@ -786,10 +859,13 @@
     sheet.hidden = false;
     el.scrim.hidden = false;
     sheet.style.transform = '';
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      sheet.classList.add('open');
-      el.scrim.classList.add('on');
-    }));
+    // parte dal film in corso, non dall'inizio dell'elenco
+    const body = $('.sheet-body', sheet);
+    const cur = $('.lv.viewing, .lv.current', sheet);
+    body.scrollTop = cur ? Math.max(0, cur.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - body.clientHeight / 2 + 40) : 0;
+    void sheet.offsetWidth;
+    sheet.classList.add('open');
+    el.scrim.classList.add('on');
     if (!silent) haptic('light');
   }
 
@@ -801,54 +877,85 @@
     sheet.style.transform = '';
     el.scrim.classList.remove('on');
     const hide = () => { if (!sheet.classList.contains('open')) sheet.hidden = true; if (!openSheetEl) el.scrim.hidden = true; };
-    if (instant) hide(); else setTimeout(hide, 450);
+    if (instant) hide(); else setTimeout(hide, 340);
   }
 
+  /** Si trascina giù per chiudere: dall'intestazione sempre, dall'elenco quando è già in cima. */
   function bindSheetDrag(sheet) {
-    let startY = 0, dy = 0, t0 = 0, active = false;
-    const handles = [$('.sheet-grab', sheet), $('.sheet-head', sheet)];
-    handles.forEach((h) => h.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('button')) return;
-      active = true; startY = e.clientY; dy = 0; t0 = performance.now();
-      sheet.classList.add('dragging');
-      h.setPointerCapture(e.pointerId);
-    }));
-    handles.forEach((h) => h.addEventListener('pointermove', (e) => {
-      if (!active) return;
-      dy = e.clientY - startY;
-      const y = dy > 0 ? dy : -Math.sqrt(-dy) * 2;
-      sheet.style.transform = `translateY(${y}px)`;
-    }));
+    const body = $('.sheet-body', sheet);
+    let startY = 0, dy = 0, lastY = 0, lastT = 0, v = 0, active = false;
+    const begin = (y) => { active = true; startY = lastY = y; dy = 0; v = 0; lastT = performance.now(); sheet.classList.add('dragging'); };
+    const move = (y) => {
+      const now = performance.now();
+      if (now > lastT) v = v * 0.4 + ((y - lastY) / (now - lastT)) * 0.6;
+      lastY = y; lastT = now;
+      dy = y - startY;
+      sheet.style.transform = `translate3d(0, ${(dy > 0 ? dy : -Math.sqrt(-dy) * 2).toFixed(1)}px, 0)`;
+    };
     const end = () => {
       if (!active) return;
       active = false;
       sheet.classList.remove('dragging');
-      const v = dy / Math.max(1, performance.now() - t0);
-      if (dy > 110 || (dy > 30 && v > 0.6)) closeSheet();
+      if (dy > 120 || (dy > 24 && v > 0.5)) closeSheet();
       else sheet.style.transform = '';
     };
-    handles.forEach((h) => { h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end); });
+
+    const handles = [$('.sheet-grab', sheet), $('.sheet-head', sheet), $('.lv-stats', sheet)].filter(Boolean);
+    handles.forEach((h) => {
+      h.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        begin(e.clientY);
+        h.setPointerCapture(e.pointerId);
+      });
+      h.addEventListener('pointermove', (e) => { if (active) move(e.clientY); });
+      h.addEventListener('pointerup', end);
+      h.addEventListener('pointercancel', end);
+    });
+
+    let y0 = 0, armed = false;
+    body.addEventListener('touchstart', (e) => {
+      armed = e.touches.length === 1 && body.scrollTop <= 0;
+      y0 = e.touches[0].clientY;
+    }, { passive: true });
+    body.addEventListener('touchmove', (e) => {
+      const y = e.touches[0].clientY;
+      if (!active) {
+        if (!armed) return;
+        if (y - y0 < 0) { armed = false; return; }
+        if (y - y0 < 8) return;
+        begin(y);
+      }
+      if (e.cancelable) e.preventDefault();
+      move(y);
+    }, { passive: false });
+    body.addEventListener('touchend', end);
+    body.addEventListener('touchcancel', end);
   }
 
   function renderLevels() {
     const ci = currentIndex();
     const total = G.levels.length;
-    const done = countDone();
-    el.lvSub.textContent = done === total ? `Tutti completati · ${countWon()} indovinati` : `${done} di ${total} completati`;
+    const won = countWon();
+    const lost = countDone() - won;
+    const rest = total - won - lost;
+    el.lvStats.innerHTML = `
+      <div class="prog"><i class="w" style="--n:${won};"></i><i class="l" style="--n:${lost};"></i><i style="--n:${rest};"></i></div>
+      <div class="lv-legend"><span class="w"><b>${won}</b> ${won === 1 ? 'indovinato' : 'indovinati'}</span><span class="l"><b>${lost}</b> ${lost === 1 ? 'perso' : 'persi'}</span><span><b>${rest}</b> da giocare</span></div>`;
+    const from = Math.max(0, Math.min(ci, view < 0 ? ci : view) - 6); // la comparsa a cascata parte vicino al film in corso
     el.lvGrid.innerHTML = G.levels.map((lv, i) => {
       const st = stOf(lv);
-      const d = `style="--d:${Math.min(i, 30)}"`;
+      const d = `style="--d:${clamp(i - from, 0, 18)}"`;
+      const viewing = i === view ? ' viewing' : '';
       if (st.d) {
         const first = st.w && st.g.length === 1;
-        return `<div class="lv-cell" ${d}><button class="lv done ${st.w ? 'win' : 'lose'}${first ? ' first' : ''}${i === view ? ' viewing' : ''}" type="button" data-i="${i}" aria-label="Livello ${i + 1}: ${esc(lv.ans.t)}">
-          <span class="lv-thumb" style="background-image:url('${lv.th}')"></span>
+        return `<div class="lv-cell" ${d}><button class="lv done ${st.w ? 'win' : 'lose'}${first ? ' first' : ''}${viewing}" type="button" data-i="${i}" aria-label="Film ${i + 1}: ${esc(lv.ans.t)}">
+          <img src="${lv.th}" alt="" loading="lazy" decoding="async" draggable="false">
           <span class="lv-badge">${first ? ICON.star : st.w ? ICON.check : ICON.x}</span><span class="lv-num">${i + 1}</span></button>
           <span class="lv-name">${esc(lv.ans.t)}</span></div>`;
       }
-      if (i === ci) {
-        return `<div class="lv-cell" ${d}><button class="lv current${i === view ? ' viewing' : ''}" type="button" data-i="${i}" aria-label="Livello ${i + 1}, in corso">${i + 1}</button><span class="lv-name">In corso</span></div>`;
-      }
-      return `<div class="lv-cell" ${d}><button class="lv locked" type="button" data-i="${i}" aria-label="Livello ${i + 1}, bloccato">${i + 1}${ICON.lock}</button><span class="lv-name muted">Bloccato</span></div>`;
+      // i film non ancora raggiunti non compaiono: quanti ne restano lo dice già la barra
+      if (i === ci) return `<div class="lv-cell" ${d}><button class="lv current${viewing}" type="button" data-i="${i}" aria-label="Film ${i + 1}, in corso">${i + 1}</button></div>`;
+      return '';
     }).join('');
   }
 
@@ -871,31 +978,55 @@
 
   /* --------------------------------------------------------------- swipe */
 
-  /** Scorrere col dito sul fotogramma per passare a quelli già sbloccati. */
+  /**
+   * Scorrere col dito sul fotogramma per passare a quelli già sbloccati. Il fotogramma segue il dito
+   * e quello accanto entra affiancato; al rilascio una molla completa il passaggio o torna indietro.
+   */
   function bindSwipe() {
     const f = el.frame;
-    let sx = 0, sy = 0, dx = 0, pid = null, active = false, swiping = false;
+    let sx = 0, sy = 0, dx = 0, lastX = 0, lastT = 0, vx = 0, pid = null, active = false, swiping = false, side = 0;
     const canGo = (dir) => {
       const t = frameIdx + dir;
       return t >= 0 && t < unlockedCount(curSt());
     };
+    /** Prepara nel secondo strato il fotogramma accanto, dal lato verso cui si trascina. */
+    const prepare = (dir) => {
+      if (side === dir) return;
+      side = dir;
+      const next = fimgs[1 - frameLayer];
+      next.style.transition = 'none';
+      next.style.opacity = 0;
+      if (!canGo(dir)) return;
+      const src = curLv().f[frameIdx + dir];
+      if (next.dataset.src !== src) { next.dataset.src = src; next.src = src; }
+    };
     f.addEventListener('pointerdown', (e) => {
-      if (mode !== 'play' || busy || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      active = true; swiping = false; dx = 0; sx = e.clientX; sy = e.clientY; pid = e.pointerId;
+      if (mode !== 'play' || busy || f.classList.contains('loading') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      active = true; swiping = false; dx = 0; vx = 0; side = 0; sx = lastX = e.clientX; sy = e.clientY; pid = e.pointerId; lastT = performance.now();
     });
     f.addEventListener('pointermove', (e) => {
       if (!active || e.pointerId !== pid) return;
+      const now = performance.now();
+      if (now > lastT) vx = vx * 0.4 + ((e.clientX - lastX) / (now - lastT)) * 0.6;
+      lastX = e.clientX; lastT = now;
       dx = e.clientX - sx;
       const dy = e.clientY - sy;
       if (!swiping) {
-        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.2) {
           swiping = true;
+          sx = e.clientX; dx = 0; // parte da fermo, senza scatto iniziale
+          frameToken++;           // da qui gli strati li muove il dito
+          clearTimeout(frameHide);
           try { f.setPointerCapture(pid); } catch (err) { /* già rilasciato */ }
-          f.classList.add('dragging');
         } else if (Math.abs(dy) > 14) { active = false; return; } else return;
       }
-      const damp = canGo(dx < 0 ? 1 : -1) ? 0.4 : 0.12; // resistenza se non c'è un fotogramma da quel lato
-      fimgs[frameLayer].style.transform = `translate3d(${(dx * damp).toFixed(1)}px, 0, 0)`;
+      if (!dx) return;
+      const dir = dx < 0 ? 1 : -1;
+      prepare(dir);
+      const ok = canGo(dir);
+      const x = ok ? dx : dx * 0.16; // resistenza se da quel lato non c'è niente
+      place(fimgs[frameLayer], x, false);
+      if (ok) place(fimgs[1 - frameLayer], x + dir * frameStep(), false);
     });
     const end = (e) => {
       if (!active || (e && e.pointerId !== pid)) return;
@@ -903,18 +1034,21 @@
       if (!swiping) return;
       swiping = false;
       suppressFrameClick = performance.now() + 450; // non aprire lo schermo intero
-      f.classList.remove('dragging');
-      fimgs[frameLayer].style.transform = '';
-      if (Math.abs(dx) < 45) return;
       const dir = dx < 0 ? 1 : -1;
-      if (!canGo(dir)) {
+      const flick = Math.abs(vx) > 0.35 && Math.sign(vx) === Math.sign(dx);
+      if (dx && canGo(dir) && (Math.abs(dx) > f.clientWidth * 0.2 || flick)) {
+        haptic('light');
+        showFrame(frameIdx + dir, dir, dx);
+        return;
+      }
+      // torna al suo posto
+      place(fimgs[frameLayer], 0, true);
+      if (side && canGo(side)) place(fimgs[1 - frameLayer], side * frameStep(), true);
+      if (dx && !canGo(dir) && Math.abs(dx) > 40) {
         const tab = tabBtns[frameIdx + dir];
         if (tab) restartAnim(tab, 'nope');
         haptic('error');
-        return;
       }
-      haptic('light');
-      showFrame(frameIdx + dir, dir);
     };
     f.addEventListener('pointerup', end);
     f.addEventListener('pointercancel', end);
@@ -922,27 +1056,57 @@
 
   /* ------------------------------------------------------------ lightbox */
 
-  const lb = { s: 1, x: 0, y: 0, ptrs: new Map(), start: null, lastTap: 0, dragY: 0 };
+  const lb = { s: 1, x: 0, y: 0, ptrs: new Map(), start: null, lastTap: 0, dragY: 0, closing: false };
+
+  /** Trasformazione che riporta l'immagine a schermo intero esattamente sopra il riquadro del fotogramma. */
+  function lbHome() {
+    const st = el.lbStage.getBoundingClientRect();
+    const fr = el.frame.getBoundingClientRect();
+    const img = fimgs[frameLayer];
+    const r = img.naturalWidth ? img.naturalWidth / img.naturalHeight : fr.width / fr.height;
+    let w = st.width, h = w / r;
+    if (h > st.height) { h = st.height; w = h * r; }
+    const s = Math.max(fr.width / w, fr.height / h);
+    const x = fr.left + fr.width / 2 - st.left - (st.width / 2) * s;
+    const y = fr.top + fr.height / 2 - st.top - (st.height / 2) * s;
+    return `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${s.toFixed(4)})`;
+  }
+  const lbNow = () => `translate3d(${lb.x}px, ${lb.y + lb.dragY}px, 0) scale(${lb.s})`;
 
   function openLightbox() {
     const src = fimgs[frameLayer].dataset.src;
-    if (!src) return;
+    if (!src || lb.closing) return;
     el.lbImg.src = src;
     Object.assign(lb, { s: 1, x: 0, y: 0, dragY: 0 });
-    applyLb(false);
-    el.lightbox.classList.remove('closing');
+    lb.ptrs.clear();
     el.lightbox.hidden = false;
-    const hint = $('.lb-hint', el.lightbox);
-    hint.style.animation = 'none'; void hint.offsetWidth; hint.style.animation = '';
+    applyLb(false);
+    const home = lbHome();
+    void el.lightbox.offsetWidth;
+    el.lightbox.classList.add('open');
+    anim(el.lbImg, [{ transform: home }, { transform: lbNow() }], { duration: ms('--t-spring'), easing: ease('--spring') });
   }
   function closeLightbox() {
-    el.lightbox.classList.add('closing');
-    setTimeout(() => { el.lightbox.hidden = true; el.lightbox.classList.remove('closing'); el.lbImg.style.opacity = ''; }, 240);
+    if (el.lightbox.hidden || lb.closing) return;
+    lb.closing = true;
+    const from = lbNow();
+    el.lbBg.style.transition = '';
+    el.lbBg.style.opacity = '';
+    el.lightbox.classList.remove('open');
+    const a = anim(el.lbImg, [{ transform: from }, { transform: lbHome() }], { duration: 300, easing: ease('--snap'), fill: 'forwards' });
+    const done = () => {
+      el.lightbox.hidden = true;
+      a.cancel();
+      lb.closing = false;
+    };
+    a.finished.then(done, done);
   }
-  function applyLb(anim) {
-    el.lbImg.style.transition = anim ? 'transform .35s cubic-bezier(.22,1,.36,1)' : 'none';
-    el.lbImg.style.transform = `translate3d(${lb.x}px, ${lb.y + lb.dragY}px, 0) scale(${lb.s})`;
-    el.lbImg.style.opacity = lb.dragY ? String(clamp(1 - Math.abs(lb.dragY) / 500, 0.4, 1)) : '';
+  function applyLb(animate) {
+    el.lbImg.style.transition = animate ? `transform ${cssVar('--t-snap')} var(--snap)` : 'none';
+    el.lbImg.style.transform = lbNow();
+    // trascinando verso il basso lo sfondo si schiarisce
+    el.lbBg.style.transition = lb.dragY ? 'none' : '';
+    el.lbBg.style.opacity = lb.dragY ? String(clamp(1 - Math.abs(lb.dragY) / 360, 0.25, 1)) : '';
   }
   function clampLb() {
     const r = el.lbStage.getBoundingClientRect();
@@ -997,7 +1161,7 @@
       }
       if (lb.ptrs.size) return;
       lb.start = null;
-      if (Math.abs(lb.dragY) > 120) { closeLightbox(); return; }
+      if (Math.abs(lb.dragY) > 90) { closeLightbox(); return; }
       lb.dragY = 0;
       if (st && st.p && !st.moved && performance.now() - st.t < 250) {
         const now = performance.now();
@@ -1187,7 +1351,9 @@
     });
     bindSwipe();
 
-    $('#btnLevels').addEventListener('click', () => { if (G && G.levels.length) openSheet(el.sheetLevels); });
+    const openLevels = () => { if (G && G.levels.length) openSheet(el.sheetLevels); };
+    $('#btnLevels').addEventListener('click', openLevels);
+    el.count.addEventListener('click', openLevels);
     el.screen.addEventListener('click', (e) => { if (e.target.closest('[data-open-levels]')) openSheet(el.sheetLevels); });
     el.scrim.addEventListener('click', () => closeSheet());
     $$('[data-close]').forEach((b) => b.addEventListener('click', () => closeSheet()));
@@ -1248,7 +1414,7 @@
     } catch (err) {
       console.error(err);
       doc.body.classList.add('ready');
-      showEmpty('Non riesco a scaricare i film. Riprovo da solo appena torna la connessione.');
+      showEmpty(true);
       return;
     } finally {
       starting = false;
@@ -1282,7 +1448,7 @@
       if (!G.levels.length) { showEmpty(); return true; }
       const i = curId ? G.levels.findIndex((lv) => lv.id === curId) : -1;
       if (mode === 'play' && i >= 0) {
-        fimgs.forEach((f) => { f.classList.remove('on'); delete f.dataset.src; });
+        resetFrames();
         renderLevel(i, { frame: Math.min(keepFrame, unlockedCount(stOf(G.levels[i])) - 1) });
         if (typed) { el.input.value = typed; onInput(); }
       } else {
@@ -1304,7 +1470,7 @@
     imgRetry++;
     setTimeout(() => { // problema di rete momentaneo: riprova la stessa immagine
       if (mode !== 'play') return;
-      fimgs.forEach((f) => { f.classList.remove('on'); delete f.dataset.src; });
+      resetFrames();
       showFrame(frameIdx);
     }, 1500 * imgRetry);
   }
