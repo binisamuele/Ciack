@@ -4,13 +4,15 @@
    - L'app si apre anche se la rete è lenta o assente per un attimo.
    - Pagina ed elenco dei film: prima la rete (versione sempre aggiornata),
      la copia salvata solo se la rete non risponde.
-   - Fotogrammi: una volta scaricati restano salvati (i loro nomi non cambiano mai).
+   - Fotogrammi: mai salvati qui. Li gestisce la cache normale del browser, che ha una
+     scadenza (vedi _headers) e viene svuotata dal telefono da solo: se non giochi per un
+     po', sul telefono restano solo questa copia dell'app e i progressi.
    Questo file viene completato dalla build ({{BUILD}} e {{V}}).
    ========================================================================== */
 const BUILD = '{{BUILD}}';
 const V = '{{V}}';
 const SHELL = 'ciak-shell-' + BUILD;
-const IMAGES = 'ciak-img-v1';
+const OLD_IMAGES = 'ciak-img-v1'; // vecchia raccolta dei fotogrammi: non più usata, va cancellata
 const NET_TIMEOUT = 4500; // ms prima di usare la copia salvata
 
 const PRECACHE = [
@@ -34,7 +36,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     for (const key of await caches.keys()) {
-      if (key.startsWith('ciak-shell-') && key !== SHELL) await caches.delete(key);
+      if (key === OLD_IMAGES || (key.startsWith('ciak-shell-') && key !== SHELL)) await caches.delete(key);
     }
     await self.clients.claim();
   })());
@@ -53,26 +55,23 @@ self.addEventListener('fetch', (event) => {
   if (req.mode === 'navigate' || path === '' || path === 'index.html') {
     event.respondWith(networkFirst(req, './'));
   } else if (path === 'game.json') {
-    event.respondWith(networkFirst(req, 'game.json', pruneImages));
+    event.respondWith(networkFirst(req, 'game.json'));
   } else if (path.startsWith('f/')) {
-    event.respondWith(cacheFirst(req, IMAGES));
+    return; // fotogrammi: direttamente dalla rete, senza copia permanente
   } else {
     event.respondWith(cacheFirst(req, SHELL));
   }
 });
 
 /** Rete con un tempo massimo; se non risponde (o è offline) usa la copia salvata. */
-async function networkFirst(req, key, onFresh) {
+async function networkFirst(req, key) {
   const cache = await caches.open(SHELL);
   // una richiesta di navigazione non si può copiare con opzioni: si riparte dall'indirizzo
   const fresh = req.mode === 'navigate'
     ? new Request(req.url, { cache: 'no-store', credentials: 'same-origin' })
     : new Request(req, { cache: 'no-store' });
   const network = fetch(fresh).then(async (res) => {
-    if (res.ok) {
-      await cache.put(key, res.clone());
-      if (onFresh) onFresh(res.clone()).catch(() => {});
-    }
+    if (res.ok) await cache.put(key, res.clone());
     return res;
   });
   const saved = cache.match(key);
@@ -94,18 +93,4 @@ async function cacheFirst(req, name) {
   const res = await fetch(req);
   if (res.ok) cache.put(req, res.clone());
   return res;
-}
-
-/** Tiene solo le immagini ancora usate dall'elenco dei film aggiornato. */
-async function pruneImages(res) {
-  const game = await res.json();
-  const keep = new Set();
-  for (const lv of game.levels || []) {
-    for (const u of [...(lv.f || []), ...(lv.b || []), lv.th]) if (u) keep.add(u);
-  }
-  if (!keep.size) return;
-  const cache = await caches.open(IMAGES);
-  for (const req of await cache.keys()) {
-    if (!keep.has(rel(new URL(req.url)))) await cache.delete(req);
-  }
 }
