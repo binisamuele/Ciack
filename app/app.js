@@ -319,23 +319,39 @@
   /* ------------------------------------------------------------ viewport */
 
   let baseH = 0; // altezza senza tastiera
+  let baseW = 0;
   function syncViewport() {
     const vv = window.visualViewport;
     if (vv && vv.scale > 1.01) return; // zoom manuale: non toccare
     const h = vv ? vv.height : window.innerHeight;
     const top = vv ? Math.max(0, vv.offsetTop) : 0;
+    const w = vv ? vv.width : window.innerWidth;
     const focused = doc.activeElement === el.input;
-    if (!focused || h > baseH) baseH = h;
+    if (Math.abs(w - baseW) > 40) { baseW = w; baseH = h; } // telefono ruotato: nuova misura di riferimento
+    if (h > baseH) baseH = h;
     root.style.setProperty('--vvh', Math.round(h) + 'px');
     el.app.style.transform = top ? `translate3d(0, ${Math.round(top)}px, 0)` : '';
-    // tastiera a schermo aperta: lo spazio visibile si è ridotto mentre si scrive
-    doc.body.classList.toggle('kb', focused && baseH - h > 150);
+    // Layout "con tastiera" finché la tastiera occupa davvero lo schermo, non finché c'è il cursore:
+    // toccando un pulsante il cursore se ne va subito, ma la tastiera si chiude dopo. Se il layout
+    // cambiasse al momento del tocco, il pulsante si sposterebbe sotto il dito e il tocco andrebbe a vuoto.
+    const open = baseH - h > 150;
+    doc.body.classList.toggle('kb', open && (focused || doc.body.classList.contains('kb')));
     if (!el.suggest.hidden) sizeSuggest();
   }
 
+  let kbFallback = 0;
   function setKeyboard() {
     syncViewport();
     setTimeout(syncViewport, 350);
+    clearTimeout(kbFallback);
+    // se il telefono non avvisa che la tastiera si è chiusa, rimetti comunque il layout normale
+    kbFallback = setTimeout(() => {
+      if (doc.activeElement === el.input) return;
+      const vv = window.visualViewport;
+      baseH = Math.max(baseH, vv ? vv.height : window.innerHeight);
+      doc.body.classList.remove('kb');
+      syncViewport();
+    }, 900);
   }
 
   /* ------------------------------------------------------------- ambient */
@@ -1373,6 +1389,12 @@
     });
 
     el.clear.addEventListener('pointerdown', (e) => e.preventDefault());
+
+    // Pulsante blu con la tastiera aperta: il cursore resta nella casella finché la risposta non è
+    // partita, così niente si muove sotto il dito. La tastiera si chiude subito dopo l'invio.
+    const keepFocus = (e) => { if (doc.activeElement === el.input) e.preventDefault(); };
+    el.send.addEventListener('pointerdown', keepFocus);
+    el.send.addEventListener('mousedown', keepFocus);
     el.clear.addEventListener('click', () => { el.input.value = ''; onInput(); el.input.focus(); });
 
     el.form.addEventListener('submit', (e) => {
